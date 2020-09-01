@@ -2,9 +2,9 @@
 
 #######################THIS IS AN FWPHYS PHD SUB PROJECT
 # Codename 000.01 - 000.0C
-# Build J
+# Build K
 # Created: 10am, 2020/Aug/05
-# This Archive: 5pm, 2020/Aug/26
+# This Archive: 10am, 2020/Sept/02
 # Publication Type: Internal Uses Only
 
 #######################PURPOSE
@@ -12,7 +12,8 @@
 # This program simulates all the familiar soliton dynamics (untouched), 
 # while also allowing the user to add a non-interacting test mass of arbitrary inertial mass
 # whose trajectory is integrated with an RK4 solver at every simulation step. 
-# This sounds dubious and is hence subject to change.
+
+# This version fixes energy computation, taking bits from the Notebook.
 
 #######################USAGE UPGRADES AND DESIGN NOTES
 # A new type of save files: Test Mass Coords and Speed, a Numpy array with 6 floats for each data point.
@@ -369,6 +370,61 @@ def calculate_energies(save_options, resol,
 
             egyarr = ne.evaluate('real((abs(psi))**2)')
             mtotlist.append(Vcell * np.sum(egyarr))
+            
+# THIS IS THE NEW CALCULATE_ENERGIES. FW 000.01J
+
+def calculate_energiesF(save_options, resol,
+        psi, cmass, TMState, masslist, Vcell, phisp, karray2, funct,
+        fft_psi, ifft_funct,
+        egpcmlist, egpsilist, ekandqlist, egylist, mtotlist,xarray, yarray, zarray,epsilon
+        ):
+    if (save_options[3]):
+        
+            egyarr = pyfftw.zeros_aligned((resol, resol, resol), dtype='float64')
+            
+            mPhi = pyfftw.zeros_aligned((resol, resol, resol), dtype='float64')
+
+            # Gravitational potential energy density associated with the point masses potential
+            egyarr = ne.evaluate('real((abs(psi))**2)')
+            
+            for MI in range(len(masslist)):
+        
+                State = TMState[int(MI*6):int(MI*6+5)]
+            
+                TMx = State[0]
+                TMy = State[1]
+                TMz = State[2]
+                
+                mT = masslist[MI]
+            
+                distarrayTM = ne.evaluate("((xarray-TMx)**2+(yarray-TMy)**2+(zarray-TMz)**2)**0.5") # Radial coordinates
+        
+                mPhi = ne.evaluate("mPhi-(mT)/(distarrayTM+epsilon)") # Pure Point Mass Energy
+                phisp = ne.evaluate("phisp+(mT)/(distarrayTM+epsilon)") # Restoring Self-Interaction
+                
+            
+            egyarr = ne.evaluate('real(mPhi*egyarr)')
+            egpcmlist.append(Vcell * np.sum(egyarr))
+            tot = Vcell * np.sum(egyarr)
+
+            # Gravitational potential energy density of self-interaction of the condensate
+            egyarr = ne.evaluate('real(0.5*(phisp)*real((abs(psi))**2))') # Restored
+            egpsilist.append(Vcell * np.sum(egyarr))
+            tot = tot + Vcell * np.sum(egyarr)
+
+            # TODO: Does this reuse the memory of funct?  That is the
+            # intention, but likely isn't what is happening
+            funct = fft_psi(psi)
+            funct = ne.evaluate('-karray2*funct')
+            funct = ifft_funct(funct)
+            egyarr = ne.evaluate('real(-0.5*conj(psi)*funct)')
+            ekandqlist.append(Vcell * np.sum(egyarr))
+            tot = tot + Vcell * np.sum(egyarr)
+
+            egylist.append(tot)
+
+            egyarr = ne.evaluate('real((abs(psi))**2)')
+            mtotlist.append(Vcell * np.sum(egyarr))
 
 ######################### FUNCTION TO EVALUATE GRADIENT USING FOURIER SERIES
 ## FieldProcess Doesn't Use That Much Time
@@ -638,13 +694,15 @@ def FloaterAdvance(TMState,h,NS,FieldFT,masslist,gridlength,resol,Kx,Ky,Kz):
 
 ######################### FUNCTION TO INITIALIZE SOLITONS AND EVOLVE
 
-def evolveF(central_mass, num_threads, length, length_units, resol, 
+def evolveF(num_threads, length, length_units, resol, 
             duration, duration_units, step_factor, save_number, save_options,
            save_path, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,
            start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, NS,Infini,Method,
            Uniform,Density):
     
-    print ('PyUL_NBody: Called. \n')
+    print ('PyUL_NBody: Build J. 2020 09 02. \n')
+    
+    central_mass = 0 # Give this parameter in the same units as the soliton mass unit. i.e. units must match with s_mass_unit
     
     print ('PyUL_NBody: Initialization Begin. \n')
     
@@ -874,7 +932,6 @@ def evolveF(central_mass, num_threads, length, length_units, resol,
     
     phisp = irfft_phi(phik)
     
-    phisp = ne.evaluate("phisp-(cmass)/(distarray+epsilon)")
     
     # FW
     MI = 0
@@ -928,12 +985,10 @@ def evolveF(central_mass, num_threads, length, length_units, resol,
         ekandqlist = []
         mtotlist = []
 
-        calculate_energies(
-            save_options, resol,
-            psi, cmass, distarray, Vcell, phisp, karray2, funct,
-            fft_psi, ifft_funct,
-            egpcmlist, egpsilist, ekandqlist, egylist, mtotlist,
-        )
+        calculate_energiesF(save_options, resol,
+        psi, cmass, TMState, masslist, Vcell, phisp, karray2, funct,
+        fft_psi, ifft_funct,
+        egpcmlist, egpsilist, ekandqlist, egylist, mtotlist,xarray, yarray, zarray, epsilon )
         
     
     ##########################################################################################
@@ -992,7 +1047,6 @@ def evolveF(central_mass, num_threads, length, length_units, resol,
         phik[0, 0, 0] = 0
         phisp = irfft_phi(phik)
         
-        phisp = ne.evaluate("phisp-(cmass)/(distarray+epsilon)")
         
         # FW TEST STEP MAGIC HAPPENS HERE
         FieldFT = FieldProcess(phik,gridlength,resol,NumSol)
@@ -1042,12 +1096,10 @@ def evolveF(central_mass, num_threads, length, length_units, resol,
 
             #Next block calculates the energies at each save, not at each timestep.
             if (save_options[3]):
-                calculate_energies(
-                    save_options, resol,
-                    psi, cmass, distarray, Vcell, phisp, karray2, funct,
-                    fft_psi, ifft_funct,
-                    egpcmlist, egpsilist, ekandqlist, egylist, mtotlist,
-                )
+                calculate_energiesF(save_options, resol, psi, 
+                                    cmass, TMState, masslist, Vcell, phisp, karray2, funct,
+                                    fft_psi, ifft_funct, egpcmlist, egpsilist, ekandqlist,
+                                    egylist, mtotlist,xarray, yarray, zarray, epsilon)
 
             #Uncomment next section if partially complete energy lists desired as simulation runs.
             #In this way, some energy data will be saved even if the simulation is terminated early.
@@ -1114,8 +1166,10 @@ def evolveF(central_mass, num_threads, length, length_units, resol,
         np.save(os.path.join(os.path.expanduser(loc), file_name), egpsilist)
         file_name = "ekandqlist.npy"
         np.save(os.path.join(os.path.expanduser(loc), file_name), ekandqlist)
-        file_name = "masslist.npy"
+        file_name = "masseslist.npy"
         np.save(os.path.join(os.path.expanduser(loc), file_name), mtotlist)
         
     return timestamp
+
+
 
