@@ -39,6 +39,11 @@ from scipy.interpolate import RegularGridInterpolator
 
 from IPython.core.display import clear_output
 
+
+def D_version():
+    return str('2020 09 10 Debug')
+
+
 hbar = 1.0545718e-34  # m^2 kg/s
 parsec = 3.0857e16  # m
 light_year = 9.4607e15  # m
@@ -376,7 +381,7 @@ def calculate_energies(save_options, resol,
 def calculate_energiesF(save_options, resol,
         psi, cmass, TMState, masslist, Vcell, phisp, karray2, funct,
         fft_psi, ifft_funct,
-        egpcmlist, egpsilist, ekandqlist, egylist, mtotlist,xarray, yarray, zarray,epsilon
+        egpcmlist, egpsilist, ekandqlist, egylist, mtotlist,xarray, yarray, zarray, epsilon
         ):
     if (save_options[3]):
         
@@ -450,6 +455,7 @@ def FieldProcess(phik,gridlength,resol,NumSol):
     return FieldFT
     
     # Using Fourier Series
+
 def FieldGradient(gridlength,Kx,Ky,Kz,FieldFT,position,resol,NumSol):
     
     xT = position[0]
@@ -465,6 +471,7 @@ def FieldGradient(gridlength,Kx,Ky,Kz,FieldFT,position,resol,NumSol):
     GradX = np.real(np.sum(ne.evaluate("FieldFT*TMxGrid"))/resol**3)
     GradY = np.real(np.sum(ne.evaluate("FieldFT*TMyGrid"))/resol**3)
     GradZ = np.real(np.sum(ne.evaluate("FieldFT*TMzGrid"))/resol**3)
+
     
     #print(max(np.abs(GradX),np.abs(GradY),np.abs(GradZ)))
     return np.array([GradX, GradY, GradZ])
@@ -490,7 +497,7 @@ def FieldGradientI(position,GxI,GyI,GzI):
 
 ######################### FUNCTION FOR N-BODY WITH VARIABLE MASS
 
-def FWNBody(t,TMState,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,NumSol):
+def FWNBody(t,TMState,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,epsilon,NumSol):
     
     dTMdt = 0*TMState
     
@@ -509,7 +516,7 @@ def FWNBody(t,TMState,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,NumSol):
         #x,y,z
         poslocal = np.array([TMState[Ind],TMState[Ind+1],TMState[Ind+2]])
         
-        # F = ma = -Grad(Phi)
+        # a = -Grad(Phi)
         GradientLocal = -1*FieldGradient(gridlength,Kx,Ky,Kz,FieldFT,poslocal,resol,NumSol)
             
         #Initialized Against ULDM Field
@@ -532,7 +539,7 @@ def FWNBody(t,TMState,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,NumSol):
                 
                 rV = poslocalX - poslocal
                 
-                rCube = (rV[0]**2+rV[1]**2+rV[2]**2)**1.5
+                rCube = (rV[0]**2+rV[1]**2+rV[2]**2)**0.5 * ((rV[0]**2+rV[1]**2+rV[2]**2)**0.5 + epsilon)**2
                 
                 #XDDOT with Gravity
                 dTMdt[Ind+3] = dTMdt[Ind+3] + masslist[ii]/rCube*rV[0]
@@ -544,13 +551,14 @@ def FWNBody(t,TMState,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,NumSol):
     
     return dTMdt
 
-def FWNBodyI(t,TMState,masslist,GxI,GyI,GzI,resol):
+def FWNBodyI(t,TMState,masslist,GxI,GyI,GzI,resol,epsilon):
     
     dTMdt = 0*TMState
     
     for i in range(len(masslist)):
         
         #0,6,12,18,...
+        
         Ind = int(6*i)
         
         #XDOT
@@ -564,6 +572,8 @@ def FWNBodyI(t,TMState,masslist,GxI,GyI,GzI,resol):
         poslocal = np.array([TMState[Ind],TMState[Ind+1],TMState[Ind+2]])
         
         GradientLocal = -1*FieldGradientI(poslocal,GxI,GyI,GzI)
+        
+        print(np.abs(GradientLocal))
         
         #Initialized Against ULDM Field
         #XDDOT
@@ -585,7 +595,7 @@ def FWNBodyI(t,TMState,masslist,GxI,GyI,GzI,resol):
                 
                 rV = poslocalX - poslocal
                 
-                rCube = (rV[0]**2+rV[1]**2+rV[2]**2)**1.5
+                rCube = (rV[0]**2+rV[1]**2+rV[2]**2)**0.5 * ((rV[0]**2+rV[1]**2+rV[2]**2)**0.5 + epsilon)**2
                 
                 #XDDOT with Gravity
                 dTMdt[Ind+3] =  dTMdt[Ind+3] + masslist[ii]/rCube*rV[0]
@@ -597,7 +607,7 @@ def FWNBodyI(t,TMState,masslist,GxI,GyI,GzI,resol):
     
     return dTMdt
 
-def FloaterAdvanceI(TMState,h,NS,masslist,gridlength,resol,GxI,GyI,GzI,NumSol):
+def FloaterAdvanceI(TMState,h,NS,masslist,gridlength,resol,GxI,GyI,GzI,epsilon):
         # We pass on phik into the Gradient Function Above. This saves one inverse FFT call.
         # The N-Body Simulation is written from scratch
 
@@ -606,14 +616,14 @@ def FloaterAdvanceI(TMState,h,NS,masslist,gridlength,resol,GxI,GyI,GzI,NumSol):
         if NS == 0:
         
             t = 0
-            TMStateOut = TMState + FWNBodyI(t,TMState,masslist,GxI,GyI,GzI,resol)*h
+            TMStateOut = TMState + FWNBodyI(t,TMState,masslist,GxI,GyI,GzI,resol,epsilon)*h
             
         else:
                 
         #TMStateInteg = odeint(FWNBody,TMState,tInt,args=(masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,NumSol))
             t_step = h/NS
             TMStateInteg = solve_ivp(
-                fun = lambda t, y: FWNBodyI(t,TMState,masslist,GxI,GyI,GzI,resol),
+                fun = lambda t, y: FWNBodyI(t,TMState,masslist,GxI,GyI,GzI,resol,epsilon),
                 t_span = [0,h], 
                 y0 = TMState, 
                 method = 'RK23',
@@ -624,21 +634,18 @@ def FloaterAdvanceI(TMState,h,NS,masslist,gridlength,resol,GxI,GyI,GzI,NumSol):
         
             TMStateOut = TMStateOut[:,-1]
         
-        
-        
         #print(TMStateInteg)
-        #print(TMStateOut)
-        
+        #print(TMStateOut)    
         return TMStateOut
-def FloaterAdvance(TMState,h,NS,FieldFT,masslist,gridlength,resol,Kx,Ky,Kz,NumSol):
+    
+def FloaterAdvance(TMState,h,NS,FieldFT,masslist,gridlength,resol,Kx,Ky,Kz,epsilon,NumSol):
         # We pass on phik into the Gradient Function Above. This saves one inverse FFT call.
         # The N-Body Simulation is written from scratch
 
-        tInt = np.linspace(0,h,NS+1)
         # 
         if NS == 0:
 
-            TMStateOut = TMState + FWNBody(0,TMState,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,NumSol)*h
+            TMStateOut = TMState + FWNBody(0,TMState,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,epsilon,NumSol)*h
         
         elif NS%4 == 0:
             
@@ -647,10 +654,10 @@ def FloaterAdvance(TMState,h,NS,FieldFT,masslist,gridlength,resol,Kx,Ky,Kz,NumSo
             H = h/NRK
             
             for RKI in range(NRK):
-                TMK1 = FWNBody(0,TMState,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,NumSol)   
-                TMK2 = FWNBody(0,TMState + H/2*TMK1,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,NumSol)
-                TMK3 = FWNBody(0,TMState + H/2*TMK2,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,NumSol)
-                TMK4 = FWNBody(0,TMState + H*TMK3,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,NumSol)
+                TMK1 = FWNBody(0,TMState,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,epsilon,NumSol)   
+                TMK2 = FWNBody(0,TMState + H/2*TMK1,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,epsilon,NumSol)
+                TMK3 = FWNBody(0,TMState + H/2*TMK2,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,epsilon,NumSol)
+                TMK4 = FWNBody(0,TMState + H*TMK3,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,epsilon,NumSol)
                 TMState = TMState + H/6*(TMK1+2*TMK2+2*TMK3+TMK4)
                 
             TMStateOut = TMState
@@ -658,7 +665,7 @@ def FloaterAdvance(TMState,h,NS,FieldFT,masslist,gridlength,resol,Kx,Ky,Kz,NumSo
         else:
             t_step = h/NS
             TMStateInteg = solve_ivp(
-                fun = lambda t, y: FWNBody(t,y,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,NumSol),
+                fun = lambda t, y: FWNBody(t,y,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,epsilon,NumSol),
                 t_span = [0,h], 
                 y0 = TMState, 
                 method = 'RK23',
@@ -667,42 +674,21 @@ def FloaterAdvance(TMState,h,NS,FieldFT,masslist,gridlength,resol,Kx,Ky,Kz,NumSo
             TMStateOut = TMStateInteg.y
             TMStateOut = TMStateOut[:,-1]
         
+        #print(TMStateOut[3:5])
+        
         return TMStateOut
-
-    
-'''
-def FloaterAdvance(TMState,h,NS,FieldFT,masslist,gridlength,resol,Kx,Ky,Kz):
-        # We pass on phik into the Gradient Function Above. This saves one inverse FFT call.
-        # The N-Body Simulation is written from scratch
-        # This version uses ODEINT again.
-        
-        TMStateLocal = TMState.flatten()
-        
-        
-        # One Newton Step!
-        t = 0
-        
-        TMStateInteg = TMStateLocal + FWNBody(TMStateLocal,t,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz)*h
-                
-        #print(TMStateInteg)
-        #print(TMStateOut)
-        
-        TMState = TMStateInteg.reshape(-1, 6)
-        
-        return TMState
-'''
 
 ######################### FUNCTION TO INITIALIZE SOLITONS AND EVOLVE
 
-def evolveF(num_threads, length, length_units, resol, 
+def evolveF(central_mass, num_threads, length, length_units, resol, 
             duration, duration_units, step_factor, save_number, save_options,
            save_path, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,
            start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, NS,Infini,Method,
-           Uniform,Density):
+           Uniform,Density,a):
     
-    print ('PyUL_NBody: Build J. 2020 09 02. \n')
+    print ('PyUL_NBody: Build K. 2020 09 10. \n')
     
-    central_mass = 0 # Give this parameter in the same units as the soliton mass unit. i.e. units must match with s_mass_unit
+    
     
     print ('PyUL_NBody: Initialization Begin. \n')
     
@@ -739,7 +725,7 @@ def evolveF(num_threads, length, length_units, resol,
     Vcell = (gridlength / float(resol)) ** 3
     
     if Infini:
-        epsilon = gridlength/(100*float(resol))
+        epsilon = gridlength/(4*float(resol))
     else:
         epsilon = 0
 
@@ -802,7 +788,6 @@ def evolveF(num_threads, length, length_units, resol,
     file.write(('{}{}{}{}{}{}'.format('\nm_mass_unit = ', m_mass_unit, ', m_position_unit = ', m_position_unit, ', m_velocity_unit = ', m_velocity_unit)))
     file.write('\n\nNote: If the above units are blank, this means that the soliton parameters were specified in code units')
     
-    
     file.close()
 
     loc = save_path + '/' + timestamp
@@ -811,14 +796,18 @@ def evolveF(num_threads, length, length_units, resol,
     ##########################################################################################
     # SET UP THE REAL SPACE COORDINATES OF THE GRID - FW Revisit
 
-    gridvec = np.linspace(-gridlength / 2.0 + gridlength / float(2 * resol), gridlength / 2.0 - gridlength / float(2 * resol), resol)
+    #OLD
+    #gridvec = np.linspace(-gridlength / 2.0 + gridlength / float(2 * resol), gridlength / 2.0 - gridlength / float(2 * resol), resol)
+    
+    gridvec = np.linspace(-gridlength / 2.0, gridlength / 2.0, resol, endpoint=False)
+    
     xarray, yarray, zarray = np.meshgrid(
         gridvec, gridvec, gridvec,
         sparse=True, indexing='ij',
     )
     distarray = ne.evaluate("(xarray**2+yarray**2+zarray**2)**0.5") # Radial coordinates
     
-    WN = 2*np.pi*np.fft.fftfreq(resol, gridlength/(resol)) # 2pi Pre-multiplied
+    WN =        2*np.pi*np.fft.fftfreq(resol, gridlength/(resol)) # 2pi Pre-multiplied
     
     Kx,Ky,Kz = np.meshgrid(WN,WN,WN,sparse=True, indexing='ij',)
     
@@ -840,8 +829,6 @@ def evolveF(num_threads, length, length_units, resol,
     psi = pyfftw.zeros_aligned((resol, resol, resol), dtype='complex128')
     funct = pyfftw.zeros_aligned((resol, resol, resol), dtype='complex128')    
     
-
-
     # INITIALISE SOLITONS WITH SPECIFIED MASS, POSITION, VELOCITY, PHASE
 
     f = np.load('./Soliton Profile Files/initial_f.npy')
@@ -875,7 +862,6 @@ def evolveF(num_threads, length, length_units, resol,
         psi = ne.evaluate("0*psi + sqrt(Density)")
         
     rho = ne.evaluate("real(abs(psi)**2)")
-
 
     fft_psi = pyfftw.builders.fftn(psi, axes=(0, 1, 2), threads=num_threads)
     
@@ -919,7 +905,6 @@ def evolveF(num_threads, length, length_units, resol,
     phik = rfft_rho(rho)  # not actually phik but phik is defined in next line
     
     phik = ne.evaluate("-4*3.141593*phik/rkarray2")
-    
 
     phik[0, 0, 0] = 0
     
@@ -930,7 +915,10 @@ def evolveF(num_threads, length, length_units, resol,
 
     phisp = pyfftw.zeros_aligned((resol, resol, resol), dtype='float64')
     
-    phisp = irfft_phi(phik)
+    # phisp = irfft_phi(phik)
+    
+    # Debug Rollback
+    phisp = ne.evaluate("phisp-a*cmass/(a*distarray+exp(-a*distarray))")
     
     
     # FW
@@ -961,7 +949,7 @@ def evolveF(num_threads, length, length_units, resol,
         
         TMState.append([TMx,TMy,TMz,Vx,Vy,Vz])
         
-        phisp = ne.evaluate("phisp-(TMmass)/(distarrayTM+epsilon)")
+        phisp = ne.evaluate("phisp-a*TMmass/(a*distarrayTM+exp(-a*distarrayTM))")
         
         MI = int(MI + 1)
         
@@ -972,6 +960,9 @@ def evolveF(num_threads, length, length_units, resol,
     TMState = TMState.flatten(order='C')
     
     print('PyUL_NBody: The Initial TM State List Is\n', TMState)
+    
+    if cmass != 0:
+        print('\n PyUL_NBody: Testing with Central Mass, ',central_mass)
     
     
     MI = 0
@@ -1027,6 +1018,7 @@ def evolveF(num_threads, length, length_units, resol,
         print("WARNING: Detected significant overlap between solitons in I.V.")
     print('\n')
     tinit = time.time()
+    
     SR = np.linspace(-gridlength/2,gridlength/2,resol,endpoint=False)
 
     for ix in range(actual_num_steps):
@@ -1045,12 +1037,27 @@ def evolveF(num_threads, length, length_units, resol,
         phik = ne.evaluate("-4*3.141593*(phik)/rkarray2")
         
         phik[0, 0, 0] = 0
+        
         phisp = irfft_phi(phik)
         
+
+        phisp = ne.evaluate("phisp-a*cmass/(a*distarray+exp(-a*distarray))")
+
+        phik = rfft_rho(phisp)
+
+        phik[0, 0, 0] = 0
         
-        # FW TEST STEP MAGIC HAPPENS HERE
         FieldFT = FieldProcess(phik,gridlength,resol,NumSol)
-        # This converts rfftn result to fftn
+        
+        if np.any(np.isnan(FieldFT)):
+            print('ERROR, NaN Occurred. Something is seriously wrong!')
+            print(phik)
+            time.sleep(200)
+            break
+            
+        # FW TEST STEP MAGIC HAPPENS HERE
+        
+        # This Converts the RFFTn to FFTn
         
         if Method == 2 and NumSol != 0:
             
@@ -1068,10 +1075,11 @@ def evolveF(num_threads, length, length_units, resol,
             GyI = RegularGridInterpolator((SR,SR,SR),Gy,method='linear',bounds_error = False, fill_value = 0)
             GzI = RegularGridInterpolator((SR,SR,SR),Gz,method='linear',bounds_error = False, fill_value = 0)
             
-            TMState = FloaterAdvanceI(TMState,h,NS,masslist,gridlength,resol,GxI,GyI,GzI,NumSol)
+            TMState = FloaterAdvanceI(TMState,h,NS,masslist,gridlength,resol,GxI,GyI,GzI,epsilon)
        
         else:
-            TMState = FloaterAdvance(TMState,h,NS,FieldFT,masslist,gridlength,resol,Kx,Ky,Kz,NumSol)
+            
+            TMState = FloaterAdvance(TMState,h,NS,FieldFT,masslist,gridlength,resol,Kx,Ky,Kz,epsilon,NumSol)
             
         for MI in range(NumTM):
         
@@ -1085,7 +1093,7 @@ def evolveF(num_threads, length, length_units, resol,
             
             distarrayTM = ne.evaluate("((xarray-TMx)**2+(yarray-TMy)**2+(zarray-TMz)**2)**0.5") # Radial coordinates
         
-            phisp = ne.evaluate("phisp-(mT)/(distarrayTM+epsilon)")
+            phisp = ne.evaluate("phisp-a*mT/(a*distarrayTM+exp(-a*distarrayTM))")
         
         
         #Next if statement ensures that an extra half step is performed at each save point
@@ -1170,6 +1178,7 @@ def evolveF(num_threads, length, length_units, resol,
         np.save(os.path.join(os.path.expanduser(loc), file_name), mtotlist)
         
     return timestamp
+
 
 
 
