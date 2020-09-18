@@ -41,7 +41,7 @@ from IPython.core.display import clear_output
 
 
 def D_version():
-    return str('2020 09 15 For 000.12')
+    return str('2020 09 17, Compiled For 000.12.2')
 
 hbar = 1.0545718e-34  # m^2 kg/s
 parsec = 3.0857e16  # m
@@ -241,7 +241,7 @@ def initsoliton(funct, xarray, yarray, zarray, position, alpha, f, delta_x):
 
 
 def save_grid(
-        rho, psi, resol,TMState,
+        rho, psi, resol, TMState, phisp,
         save_options,
         npy, npz, hdf5,
         loc, ix, its_per_save
@@ -338,6 +338,55 @@ def save_grid(
                 f = h5py.File(file_name, 'w')
                 dset = f.create_dataset("init", data=TMState)
                 f.close()
+                
+                
+        if (save_options[6]):
+            if (npy):
+                file_name = "Field3D_#{0}.npy".format(save_num)
+                np.save(
+                    os.path.join(os.path.expanduser(loc), file_name),
+                    phisp
+                )
+            if (npz):
+                file_name = "Field3D_#{0}.npz".format(save_num)
+                np.savez(
+                    os.path.join(os.path.expanduser(loc), file_name),
+                    phisp
+                )
+            if (hdf5):
+                file_name = "Field3D_#{0}.hdf5".format(save_num)
+                file_name = os.path.join(os.path.expanduser(loc), file_name)
+                f = h5py.File(file_name, 'w')
+                dset = f.create_dataset("init", data=phisp)
+                f.close()
+                
+                
+                
+        if (save_options[7]):
+            
+            phisp_slice = phisp[:,:,int(resol/2)] # z = 0
+            
+            if (npy):
+                file_name = "Field2D_#{0}.npy".format(save_num)
+                np.save(
+                    os.path.join(os.path.expanduser(loc), file_name),
+                    phisp_slice
+                )
+            if (npz):
+                file_name = "Field2D_#{0}.npz".format(save_num)
+                np.savez(
+                    os.path.join(os.path.expanduser(loc), file_name),
+                    phisp_slice
+                )
+            if (hdf5):
+                file_name = "Field2D_#{0}.hdf5".format(save_num)
+                file_name = os.path.join(os.path.expanduser(loc), file_name)
+                f = h5py.File(file_name, 'w')
+                dset = f.create_dataset("init", data=phisp_slice)
+                f.close()
+            
+            
+            phisp
 
 # CALCULATE_ENERGIES IS NOW OBSOLETE. FW 000.01D
 
@@ -792,7 +841,7 @@ def evolve(central_mass, num_threads, length, length_units,
     
     fft_phi = pyfftw.builders.fftn(phisp, axes=(0, 1, 2), threads=num_threads)
     
-    # phisp = irfft_phi(phik)
+    phisp = irfft_phi(phik)
     
     # Debug Rollback
     phisp = ne.evaluate("phisp-a*cmass/(a*distarray+exp(-a*distarray))")
@@ -862,7 +911,7 @@ def evolve(central_mass, num_threads, length, length_units,
     ##########################################################################################
     # PRE-LOOP SAVE I.E. INITIAL CONFIG
     save_grid(
-            rho, psi, resol, TMState,
+            rho, psi, resol, TMState, phisp,
             save_options,
             npy, npz, hdf5,
             loc, -1, 1,
@@ -980,7 +1029,7 @@ def evolve(central_mass, num_threads, length, length_units,
         if ((ix + 1) % its_per_save) == 0:
                         
             save_grid(
-                    rho, psi, resol,TMState,
+                    rho, psi, resol, TMState, phisp,
                     save_options,
                     npy, npz, hdf5,
                     loc, ix, its_per_save,
@@ -1028,6 +1077,7 @@ def evolve(central_mass, num_threads, length, length_units,
         np.save(os.path.join(os.path.expanduser(loc), file_name), mtotlist)
         
     return timestamp
+
 
 
 
