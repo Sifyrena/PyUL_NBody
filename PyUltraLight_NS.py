@@ -41,7 +41,7 @@ from IPython.core.display import clear_output
 
 
 def D_version():
-    return str('2020 09 17, Compiled For 000.12.2')
+    return str('2020 09 21, Equinox Special Bugfix')
 
 hbar = 1.0545718e-34  # m^2 kg/s
 parsec = 3.0857e16  # m
@@ -429,8 +429,9 @@ def calculate_energies(save_options, resol,
 def calculate_energiesF(save_options, resol,
         psi, cmass, TMState, masslist, Vcell, phisp, karray2, funct,
         fft_psi, ifft_funct,
-        egpcmlist, egpsilist, ekandqlist, egylist, mtotlist,xarray, yarray, zarray, epsilon
+        egpcmlist, egpsilist, ekandqlist, egylist, mtotlist,xarray, yarray, zarray, a
         ):
+    
     if (save_options[3]):
         
             egyarr = pyfftw.zeros_aligned((resol, resol, resol), dtype='float64')
@@ -438,6 +439,7 @@ def calculate_energiesF(save_options, resol,
             mPhi = pyfftw.zeros_aligned((resol, resol, resol), dtype='float64')
 
             # Gravitational potential energy density associated with the point masses potential
+            
             egyarr = ne.evaluate('real((abs(psi))**2)')
             
             for MI in range(len(masslist)):
@@ -451,9 +453,10 @@ def calculate_energiesF(save_options, resol,
                 mT = masslist[MI]
             
                 distarrayTM = ne.evaluate("((xarray-TMx)**2+(yarray-TMy)**2+(zarray-TMz)**2)**0.5") # Radial coordinates
-        
-                mPhi = ne.evaluate("mPhi-(mT)/(distarrayTM+epsilon)") # Pure Point Mass Energy
-                phisp = ne.evaluate("phisp+(mT)/(distarrayTM+epsilon)") # Restoring Self-Interaction
+                                
+                mPhi = ne.evaluate("mPhi-a*mT/(a*distarrayTM+exp(-a*distarrayTM))") # Potential Due to Test Mass
+                
+                phisp = ne.evaluate("phisp+a*mT/(a*distarrayTM+exp(-a*distarrayTM))") # Restoring Self-Interaction
                 
             
             egyarr = ne.evaluate('real(mPhi*egyarr)')
@@ -905,7 +908,7 @@ def evolve(central_mass, num_threads, length, length_units,
         calculate_energiesF(save_options, resol,
         psi, cmass, TMState, masslist, Vcell, phisp, karray2, funct,
         fft_psi, ifft_funct,
-        egpcmlist, egpsilist, ekandqlist, egylist, mtotlist,xarray, yarray, zarray, epsilon )
+        egpcmlist, egpsilist, ekandqlist, egylist, mtotlist,xarray, yarray, zarray, a )
         
     
     ##########################################################################################
@@ -1006,7 +1009,7 @@ def evolve(central_mass, num_threads, length, length_units,
                 calculate_energiesF(save_options, resol, psi, 
                                     cmass, TMState, masslist, Vcell, phisp, karray2, funct,
                                     fft_psi, ifft_funct, egpcmlist, egpsilist, ekandqlist,
-                                    egylist, mtotlist,xarray, yarray, zarray, epsilon)
+                                    egylist, mtotlist,xarray, yarray, zarray, a)
 
             #Uncomment next section if partially complete energy lists desired as simulation runs.
             #In this way, some energy data will be saved even if the simulation is terminated early.
