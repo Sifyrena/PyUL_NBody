@@ -68,7 +68,7 @@ def prog_bar(iteration_number, progress, tinterval,TMState):
         progress, status = 1, "\r\n"
     block = int(round(size * progress))
     text = "\r[{}] {:.0f}% {}{}{}{}".format(
-        "囧" * block + "口" * (size - block), round(progress * 100, 0),
+        "龘" * block + "丨" * (size - block), round(progress * 100, 0),
         status, ' The previous soliton simulation step took ', round(tinterval,3), ' seconds.')
     sys.stdout.write(text)
     sys.stdout.flush()
