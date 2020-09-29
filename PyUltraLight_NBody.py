@@ -774,7 +774,9 @@ def evolve(central_mass, num_threads, length, length_units,
     # CREATE THE TIMESTAMPED SAVE DIRECTORY AND CONFIG.TXT FILE
 
     save_path = os.path.expanduser(save_path)
+    
     tm = time.localtime()
+    
     tBegin = time.time()
 
     talt = ['0', '0', '0']
@@ -818,12 +820,12 @@ def evolve(central_mass, num_threads, length, length_units,
         file.write(('Using Uniform Initial ULDM Distribution.\n'))
         file.write(('{}{}\n'.format('Density =',Density)))
     
-    file.write(('{}'.format('\n masses ([mass, [x, y, z], [vx, vy, vz]]): \n')))
+    file.write(('{}'.format('\nThe point masses ([mass, [x, y, z], [vx, vy, vz]]): \n')))
     for TM in range(NumTM):
         file.write(('{}{}{}{}{}'.format('particle#', TM, ' = ', particles[TM], '\n')))
             
     file.write(('{}{}{}{}{}{}'.format('\nm_mass_unit = ', m_mass_unit, ', m_position_unit = ', m_position_unit, ', m_velocity_unit = ', m_velocity_unit)))
-    file.write('\n\nNote: If the above units are blank, this means that the soliton parameters were specified in code units')
+    file.write(('{}{}'.format('\nThe field smoothing factor in this run is: a =', a)))
     
     file.close()
 
@@ -837,8 +839,8 @@ def evolve(central_mass, num_threads, length, length_units,
     
     xarray, yarray, zarray = np.meshgrid(
         gridvec, gridvec, gridvec,
-        sparse=True, indexing='ij',
-    )
+        sparse=True, indexing='ij')
+    
     distarray = ne.evaluate("(xarray**2+yarray**2+zarray**2)**0.5") # Radial coordinates
     
     WN = 2*np.pi*np.fft.fftfreq(resol, gridlength/(resol)) # 2pi Pre-multiplied
