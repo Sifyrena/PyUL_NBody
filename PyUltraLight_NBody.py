@@ -35,7 +35,7 @@ from IPython.core.display import clear_output
 
 
 def D_version():
-    return str('2020 09 28, NBody Rollback')
+    return str('2020 09 30, NBody Symp')
 
 hbar = 1.0545718e-34  # m^2 kg/s
 parsec = 3.0857e16  # m
@@ -653,12 +653,26 @@ def FloaterAdvanceR(TMState,h,NS,FieldFT,masslist,gridlength,resol,Kx,Ky,Kz,a):
         # The N-Body Simulation is written from scratch
 
         # 
-        #if NS == 0:
-        
+        if NS == 0:
  
-        Step, GradDebug = FWNBodyR(0,TMState,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,a)
+            Step, GradDebug = FWNBodyR(0,TMState,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,a)
+            TMStateOut = TMState + Step*h
+        
 
-        TMStateOut = TMState + Step*h
+        elif NS%4 == 0:
+            
+            NRK = int(NS/4)
+            
+            H = h/NRK
+            
+            for RKI in range(NRK):
+                TMK1, Trash = FWNBodyR(0,TMState,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,a)
+                TMK2, Trash = FWNBodyR(0,TMState + H/2*TMK1,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,a)
+                TMK3, Trash = FWNBodyR(0,TMState + H/2*TMK2,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,a)
+                TMK4, GradDebug = FWNBodyR(0,TMState + H*TMK3,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,a)
+                TMState = TMState + H/6*(TMK1+2*TMK2+2*TMK3+TMK4)
+                
+            TMStateOut = TMState
 
         return TMStateOut, GradDebug
     
@@ -669,17 +683,13 @@ def FloaterAdvance(TMState,h,NS,FieldFT,masslist,gridlength,resol,Kx,Ky,Kz,epsil
         # The N-Body Simulation is written from scratch
 
         # 
-        #if NS == 0:
-        
+        if NS == 0:
+
  
-        Step, GradDebug = FWNBody(0,TMState,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,epsilon,NumSol)
+            Step, GradDebug = FWNBody(0,TMState,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,epsilon,NumSol)
 
-        TMStateOut = TMState + Step*h
-        
-        
+            TMStateOut = TMState + Step*h
 
-        
-        '''
         elif NS%4 == 0:
             
             NRK = int(NS/4)
@@ -687,14 +697,15 @@ def FloaterAdvance(TMState,h,NS,FieldFT,masslist,gridlength,resol,Kx,Ky,Kz,epsil
             H = h/NRK
             
             for RKI in range(NRK):
-                TMK1 = FWNBody(0,TMState,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,epsilon,NumSol)   
-                TMK2 = FWNBody(0,TMState + H/2*TMK1,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,epsilon,NumSol)
-                TMK3 = FWNBody(0,TMState + H/2*TMK2,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,epsilon,NumSol)
-                TMK4 = FWNBody(0,TMState + H*TMK3,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,epsilon,NumSol)
+                TMK1, Trash = FWNBody(0,TMState,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,epsilon,NumSol)
+                TMK2, Trash = FWNBody(0,TMState + H/2*TMK1,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,epsilon,NumSol)
+                TMK3, Trash = FWNBody(0,TMState + H/2*TMK2,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,epsilon,NumSol)
+                TMK4, GradDebug = FWNBody(0,TMState + H*TMK3,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,epsilon,NumSol)
                 TMState = TMState + H/6*(TMK1+2*TMK2+2*TMK3+TMK4)
                 
             TMStateOut = TMState
-            
+        
+        ''' 
         else:
             t_step = h/NS
             TMStateInteg = solve_ivp(
@@ -728,7 +739,7 @@ def evolve(central_mass, num_threads, length, length_units,
     NumTM = len(particles)
     
     # For Compatibility Safety
-    NS = 0 # Euler Integration ONLY for now
+    NS = 4 # Euler Integration ONLY for now, or RK4
     Method = 1 # No other methods for field gradient from this point on
     Infini = False
     
