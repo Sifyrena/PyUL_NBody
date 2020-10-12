@@ -30,12 +30,11 @@ import numba
 import pyfftw
 import h5py
 import os
-
+import scipy.fftpack
 from IPython.core.display import clear_output
 
-
 def D_version():
-    return str('2020 10 08, NBody with Padding')
+    return str('2020 10 09, NBody with Field Padding')
 
 hbar = 1.0545718e-34  # m^2 kg/s
 parsec = 3.0857e16  # m
@@ -51,8 +50,6 @@ H_0 = 67.7 * 1e3 / (parsec * 1e6)  # s^-1
 length_unit = (8 * np.pi * hbar ** 2 / (3 * axion_mass ** 2 * H_0 ** 2 * omega_m0)) ** 0.25
 time_unit = (3 * H_0 ** 2 * omega_m0 / (8 * np.pi)) ** -0.5
 mass_unit = (3 * H_0 ** 2 * omega_m0 / (8 * np.pi)) ** 0.25 * hbar ** 1.5 / (axion_mass ** 1.5 * G)
-
-
 
 ####################### GREEN FUNCTION DEFINITIONS FROM J. Luna Zagorac (Yale Cosmology)
 # With FW Changes to Ensure Compatibility
@@ -1030,6 +1027,27 @@ def evolve(central_mass, num_threads, length, length_units,
         its_per_save = actual_num_steps / save_number
 
     h = t / float(actual_num_steps)
+    
+    
+    
+    
+    ##########################################################################################
+    # SETUP PADDED POTENTIAL HERE (From JLZ)
+
+    rhopad = pyfftw.zeros_aligned((2*resol, resol, resol), dtype='float64')
+    bigplane = pyfftw.zeros_aligned((2*resol, 2*resol), dtype='float64')
+
+    fft_X = pyfftw.builders.fftn(rhopad, axes=(0, ), threads=num_threads)
+    ifft_X = pyfftw.builders.ifftn(rhopad, axes=(0, ), threads=num_threads)
+
+    fft_plane = pyfftw.builders.fftn(bigplane, axes=(0, 1), threads=num_threads)
+    ifft_plane = pyfftw.builders.ifftn(bigplane, axes=(0, 1), threads=num_threads)
+    
+    phisp = pyfftw.zeros_aligned((resol, resol, resol), dtype='float64')
+
+    fft_phi = pyfftw.builders.fftn(phisp, axes=(0, 1, 2), threads=num_threads)
+
+
 
     ##########################################################################################
     # SETUP K-SPACE FOR RHO (REAL)
@@ -1058,14 +1076,19 @@ def evolve(central_mass, num_threads, length, length_units,
     ##########################################################################################
     # COMPUTE INTIAL VALUE OF POTENTIAL
 
-    phisp = pyfftw.zeros_aligned((resol, resol, resol), dtype='float64')
     
-    fft_phi = pyfftw.builders.fftn(phisp, axes=(0, 1, 2), threads=num_threads)
     
-    phisp = irfft_phi(phik)
+    
+    print('PyUL_NBody: NEW, COMPUTING GREEN FUNCTIONS \n')
+
+    green = makeDCTGreen(resol) #make Green's function ONCE
+    #green = makeEvenArray(green)
+    phisp = isolatedPotential(rho, green, gridlength, fft_X, ifft_X, fft_plane, ifft_plane)
     
     # Debug Rollback
     phisp = ne.evaluate("phisp-a*cmass/(a*distarray+exp(-a*distarray))")
+    
+    
     
     
     # FW
@@ -1176,6 +1199,12 @@ def evolve(central_mass, num_threads, length, length_units,
         psi = ifft_funct(funct)
         rho = ne.evaluate("real(abs(psi)**2)")
         
+        #phik = rfft_rho(rho)  # not actually phik but phik is defined on next line
+        #phik = ne.evaluate("-4*3.141593*(phik)/rkarray2")
+        #phik[0, 0, 0] = 0
+        #phisp = irfft_phi(phik)
+        #phisp = ne.evaluate("phisp-(cmass)/distarray")
+        
         phik = rfft_rho(rho)  # not actually phik but phik is defined on next line
         
         phik = ne.evaluate("-4*3.141593*(phik)/rkarray2")
@@ -1195,8 +1224,8 @@ def evolve(central_mass, num_threads, length, length_units,
 
         TMState, GradDebug = FloaterAdvanceR(TMState,h,NS,FieldFT,masslist,gridlength,resol,Kx,Ky,Kz,a)
 
-        phisp = irfft_phi(phik)
-
+        phisp = isolatedPotential(rho, green, gridlength, fft_X, ifft_X, fft_plane, ifft_plane)
+        
         for MI in range(NumTM):
         
             State = TMState[int(MI*6):int(MI*6+5)]
