@@ -1,4 +1,4 @@
-![Project Logo](/Project_Logo.pdf)
+![Project Logo](https://github.com/Sifyrena/PyUL_NBody/blob/master/Project_Logo.pdf)
 
 # Build 0.20b (12 Oct 2020)
 
