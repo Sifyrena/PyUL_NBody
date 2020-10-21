@@ -31,10 +31,20 @@ import pyfftw
 import h5py
 import os
 import scipy.fftpack
+
+try:
+    import scipy.special.lambertw as LW
+except ModuleNotFoundError:
+    print('WARNING: SciPy Lambert W Function Not Installed. Using Pre-Computed value for W(-e^-2)')
+    def LW(a):
+        return -0.15859433956303937
+
 from IPython.core.display import clear_output
 
+
+
 def D_version():
-    return str('2020 10 15, NBody with Field Padding and Split Step')
+    return str('2020 10 17, NBody with Noncentralized Dynamical Evaluation')
 
 hbar = 1.0545718e-34  # m^2 kg/s
 parsec = 3.0857e16  # m
@@ -635,8 +645,8 @@ def FieldGradient(gridlength,Kx,Ky,Kz,FieldFT,position,resol):
 
     
 
-def FWNBodyR(t,TMState,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,a):
-    
+def FWNBodyR(t,TMState,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,a,HWHM,NCV,NCW):
+   
     dTMdt = 0*TMState
     GradDebug = np.zeros(len(masslist)*3)
     
@@ -654,10 +664,14 @@ def FWNBodyR(t,TMState,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,a):
         dTMdt[Ind+2] =  TMState[Ind+5]
         
         #x,y,z
+        
+        GradientLocal = np.zeros(3)
         poslocal = np.array([TMState[Ind],TMState[Ind+1],TMState[Ind+2]])
         
-        # a = -Grad(Phi)
-        GradientLocal = -1*FieldGradient(gridlength,Kx,Ky,Kz,FieldFT,poslocal,resol)
+        for NC in range(len(NCW)): # This is now an average
+            if NCW[NC] != 0:
+                poslocalNC = poslocal + HWHM*NCV[NC]
+                GradientLocal = GradientLocal -1*FieldGradient(gridlength,Kx,Ky,Kz,FieldFT,poslocalNC,resol)*NCW[NC]
             
         #Initialized Against ULDM Field
         #XDDOT
@@ -700,14 +714,14 @@ def FWNBodyR(t,TMState,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,a):
     return dTMdt, GradDebug
 
 
-def FloaterAdvanceR(TMState,h,NS,FieldFT,masslist,gridlength,resol,Kx,Ky,Kz,a):
+def FloaterAdvanceR(TMState,h,NS,FieldFT,masslist,gridlength,resol,Kx,Ky,Kz,a, HWHM,NCV,NCW):
         # We pass on phik into the Gradient Function Above. This saves one inverse FFT call.
         # The N-Body Simulation is written from scratch
 
         # 
         if NS == 0:
  
-            Step, GradDebug = FWNBodyR(0,TMState,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,a)
+            Step, GradDebug = FWNBodyR(0,TMState,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,a,HWHM,NCV,NCW)
             TMStateOut = TMState + Step*h
         
 
@@ -718,10 +732,10 @@ def FloaterAdvanceR(TMState,h,NS,FieldFT,masslist,gridlength,resol,Kx,Ky,Kz,a):
             H = h/NRK
             
             for RKI in range(NRK):
-                TMK1, Trash = FWNBodyR(0,TMState,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,a)
-                TMK2, Trash = FWNBodyR(0,TMState + H/2*TMK1,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,a)
-                TMK3, Trash = FWNBodyR(0,TMState + H/2*TMK2,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,a)
-                TMK4, GradDebug = FWNBodyR(0,TMState + H*TMK3,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,a)
+                TMK1, Trash = FWNBodyR(0,TMState,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,a,HWHM,NCV,NCW)
+                TMK2, Trash = FWNBodyR(0,TMState + H/2*TMK1,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,a,HWHM,NCV,NCW)
+                TMK3, Trash = FWNBodyR(0,TMState + H/2*TMK2,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,a,HWHM,NCV,NCW)
+                TMK4, GradDebug = FWNBodyR(0,TMState + H*TMK3,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,a,HWHM,NCV,NCW)
                 TMState = TMState + H/6*(TMK1+2*TMK2+2*TMK3+TMK4)
                 
             TMStateOut = TMState
@@ -737,7 +751,7 @@ def evolve(central_mass, num_threads, length, length_units,
             save_number, save_options, save_path, npz, npy, hdf5, 
             s_mass_unit, s_position_unit, s_velocity_unit, solitons,
             start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles,
-            Uniform,Density,a):
+            Uniform,Density,a, NCV,NCW):
     
     print ('PyUL_NBody: Build ',D_version(),'\n')
     
@@ -746,12 +760,32 @@ def evolve(central_mass, num_threads, length, length_units,
     NumSol = len(solitons)
     NumTM = len(particles)
     
-    # For Compatibility Safety
-    NS = 4 # Euler Integration ONLY for now, or RK4
-    Method = 1 # No other methods for field gradient from this point on
+    # For Compatibility Safety Only. The 3 following lines do not do anything.
+    NS = 4
+    Method = 1
     Infini = False
     
     print ('PyUL_NBody: This run contains', NumSol ,'ULDM solitons and', NumTM, 'point Mass partcles.', 'And each soliton step has the particles advanced by', NS+1, 'step(s) \n')
+    
+    
+    print ('PyUL_NBody: The Smoothing Factor is', a, '\n')
+    
+    HWHM = (LW(-np.exp(-2))+2)/a # inversely proportional to a.
+    
+    HWHM = np.real(HWHM)
+    
+    print ('PyUL_NBody: The ``Point Mass\'\' Gravitational HWHM is', HWHM, '\n')
+    
+    if HWHM > length / 4:
+        print("WARNING: Field Smoothing might be too big, and the perfomance will be compromised.")
+    
+    if HWHM <= length / resol:
+        print("WARNING: The field peak is narrower than one grid. The model requires a better resolution to reliably simulate.")
+    
+
+    
+    NCW = NCW/np.sum(NCW) # Normalized to 1
+    
     
     masslist = []
     
@@ -1110,7 +1144,7 @@ def evolve(central_mass, num_threads, length, length_units,
             psi = ne.evaluate("exp(-1j*h*phisp)*psi")
         
         
-        TMState, GradDebug = FloaterAdvanceR(TMState,h/2,NS,FieldFT,masslist,gridlength,resol,Kx,Ky,Kz,a)
+        TMState, GradDebug = FloaterAdvanceR(TMState,h/2,NS,FieldFT,masslist,gridlength,resol,Kx,Ky,Kz,a, HWHM,NCV,NCW)
 
 
             
@@ -1138,7 +1172,7 @@ def evolve(central_mass, num_threads, length, length_units,
             
         # FW TEST STEP MAGIC HAPPENS HERE
 
-        TMState, GradDebug = FloaterAdvanceR(TMState,h/2,NS,FieldFT,masslist,gridlength,resol,Kx,Ky,Kz,a)
+        TMState, GradDebug = FloaterAdvanceR(TMState,h/2,NS,FieldFT,masslist,gridlength,resol,Kx,Ky,Kz,a, HWHM,NCV,NCW)
 
         # New Green Function Methods
         

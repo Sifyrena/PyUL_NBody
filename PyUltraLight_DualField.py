@@ -1098,7 +1098,6 @@ def evolve(central_mass, num_threads, length, length_units,
         print("WARNING: Detected significant overlap between solitons in I.V.")
     print('\n')
     tinit = time.time()
-    FieldFT = FieldProcess(phik, gridlength, resol)
     
     for ix in range(actual_num_steps):
         
@@ -1109,7 +1108,7 @@ def evolve(central_mass, num_threads, length, length_units,
         else:
             psi = ne.evaluate("exp(-1j*h*phisp)*psi")
         
-        
+        FieldFT = FieldProcess(phik, gridlength, resol)
         TMState, GradDebug = FloaterAdvanceR(TMState,h/2,NS,FieldFT,masslist,gridlength,resol,Kx,Ky,Kz,a)
 
 
