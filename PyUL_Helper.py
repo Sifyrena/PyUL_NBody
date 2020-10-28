@@ -7,10 +7,15 @@ Created on Wed Oct 21 13:56:50 2020
 
 """
 
+D_version = 'Helper Build 2a. Using Object-Oriented Approach. 22 Oct 2020'
+
+print(D_version)
+
 import os
 import matplotlib.pyplot as plt
 import numpy as np
-
+import time
+import json
 
 def SSEst(save_options, save_number, resol):
     
@@ -29,7 +34,6 @@ def SSEst(save_options, save_number, resol):
     
     save_testmass = save_options[5]
     
-
     
     PreMult = 0
     
@@ -474,6 +478,420 @@ def PInit(Avg,AvgD,CW):
     return NCV, NCW
 
 
-def D_version():
-    return 'Helper Version 1. 21 Oct 2020'
+def Load_Config(configpath):
     
+    with open(configpath, 'r') as configfile:
+        config = configfile.read()
+        print(config)
+    
+       
+def GenerateConfig(central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_path, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, Uniform,Density,a, NCV,NCW
+           ):
+        tm = time.localtime()
+        
+        talt = ['0', '0', '0']
+        for i in range(3, 6):
+            if tm[i] in range(0, 10):
+                talt[i - 3] = '{}{}'.format('0', tm[i])
+            else:
+                talt[i - 3] = tm[i]
+        timestamp = '{}{}{}{}{}{}{}{}{}{}{}{}{}'.format(tm[0], '.', tm[1], '.', tm[2], '_', talt[0], '_', talt[1], '_', talt[2], '_', resol)
+        
+        file = open('{}{}{}'.format('./', save_path, '/timestamp.txt'), "w+")
+        file.write(timestamp)
+        
+        os.makedirs('{}{}{}{}'.format('./', save_path, '/', timestamp))
+        
+        
+        Conf_data = {}
+        
+        Conf_data['Helper Version'] = D_version
+        
+        Conf_data['Config Generation Time'] = tm
+        
+        Conf_data['Save Options'] = ({
+                'flags': save_options,
+                'folder': save_path,
+                'number': save_number,
+                'npz': npz,
+                'npy': npy,
+                'hdf5': hdf5
+                })
+        
+        
+        Conf_data['Spacial Resolution'] = resol
+        
+        Conf_data['Temporal Step Factor'] = step_factor
+    
+        
+        Conf_data['Duration'] = ({
+                'Time Duration': duration,
+                'Start Time': start_time,
+                'Time Units': duration_units
+                })
+    
+        
+        Conf_data['Simulation Box'] = ({
+        'Box Length': length,
+        'Length Units': length_units,
+        })
+        
+        
+        Conf_data['ULDM Solitons'] = ({
+        'Condition': solitons,
+        'Mass Units': s_mass_unit,
+        'Position Units': s_position_unit,
+        'Velocity Units': s_velocity_unit
+        })
+        
+        Conf_data['Matter Particles'] = ({
+        'Condition': particles,
+        'Mass Units': m_mass_unit,
+        'Position Units': m_position_unit,
+        'Velocity Units': m_velocity_unit
+        })
+        
+        Conf_data['Field-averaging Probes'] = ({
+                
+                'Probe Array': NCV.tolist(),
+                'Probe Weights': NCW.tolist()
+                
+                })
+        
+        Conf_data['Central Mass'] = central_mass
+        
+        Conf_data['Field Smoothing'] = a
+        
+        
+        Conf_data['Uniform Field Override'] = ({
+                
+                'Flag': Uniform,
+                'Density Value': Density
+                
+                })
+        
+        
+        with open('{}{}{}{}{}'.format('./', save_path, '/', timestamp, '/config.txt'), "w+") as outfile:
+            json.dump(Conf_data, outfile,indent=4)
+            
+        return '{}{}{}{}'.format('./', save_path, '/', timestamp)
+    
+
+def LoadConfig(loc):
+        
+        configfile = loc + '/config.txt'
+        
+        with open(configfile) as json_file:
+            config = json.load(json_file)
+        
+        central_mass = config["Central Mass"]
+        
+        ### Simulation Stuff
+        
+        save_options = config["Save Options"]["flags"]
+        
+        save_path = config["Save Options"]["folder"]
+        
+        hdf5 = config["Save Options"]["hdf5"]
+        
+        npy = config["Save Options"]["npy"]
+        
+        npz = config["Save Options"]["npz"]
+        
+        save_number = config["Save Options"]["number"]
+        
+        ### Time Stuff
+        
+        duration = config["Duration"]['Time Duration']
+        
+        start_time = config["Duration"]['Start Time']
+        
+        duration_units = config["Duration"]['Time Units']
+        
+        step_factor = float(config["Temporal Step Factor"])
+        
+        ### Space Stuff
+        
+        a = config["Field Smoothing"]
+        
+        resol = int(config["Spacial Resolution"])
+        
+        length = config["Simulation Box"]["Box Length"]
+        
+        length_units = config["Simulation Box"]["Length Units"]
+        
+        
+        ### Black Hole Stuff
+        
+        particles = config["Matter Particles"]['Condition']
+        
+        m_mass_unit = config["Matter Particles"]['Mass Units']
+        
+        m_position_unit = config["Matter Particles"]['Position Units']
+        
+        m_velocity_unit = config["Matter Particles"]['Velocity Units']
+        
+        
+        ### ULDM Stuff
+        
+        solitons = config["ULDM Solitons"]['Condition']
+        
+        s_mass_unit = config["ULDM Solitons"]['Mass Units']
+        
+        s_position_unit = config["ULDM Solitons"]['Position Units']
+        
+        s_velocity_unit = config["ULDM Solitons"]['Velocity Units']
+        
+        
+        ### ULDM Modifier
+        
+        Uniform = config["Uniform Field Override"]["Flag"]
+        Density = config["Uniform Field Override"]["Density Value"]
+        
+        
+        ### Field Averaging
+        
+        NCV = np.array(config["Field-averaging Probes"]["Probe Array"])
+        NCW = np.array(config["Field-averaging Probes"]["Probe Weights"])
+        
+         
+        return  central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_path, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, Uniform,Density,a, NCV,NCW
+
+
+def AnimSummary(TimeStamp,save_path, VX,VY,FPS,Loga,Skip,ToFile):
+    import matplotlib.animation
+
+    BarWidth = 1  # the width of the bars
+
+    MovieX = VX
+
+    MovieY = VY
+
+    loc = save_path + '/' + TimeStamp
+    
+    central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_path, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, Uniform,Density,a, NCV,NCW = LoadConfig(loc)
+    
+    EndNum, data, TMdata, phidata, graddata = Load_Data(save_path,TimeStamp, save_options,save_number)
+    
+    
+    ML = []
+    for i in range(len(particles)):
+        particle = particles[i]
+        
+        mass = particle[0]
+        
+        ML.append(mass)
+    
+        print(ML)
+
+    KS = np.zeros(int(EndNum))
+    PS = np.zeros(int(EndNum))
+
+    for i in range(int(EndNum)):
+        
+        Data = TMdata[i]
+        
+        if len(particles)==2:
+    
+            r = Data[0:2] - Data[6:8]
+    
+            rN = np.linalg.norm(r)
+        
+            PS[i] = -1*m1*m2*a/(a*rN+np.exp(-1*a*rN))
+       
+        for particleID in range(len(particles)):
+            Vx = Data[int(6*particleID+3)]
+            Vy = Data[int(6*particleID+4)]
+            Vz = Data[int(6*particleID+5)]
+            
+            KS[i] = KS[i] + 1/2*ML[particleID]*(Vx**2+Vy**2+Vz**2) 
+
+    egylist = np.load('{}{}'.format(loc, '/egylist.npy'))
+  
+    egylistD = egylist - egylist[1]
+    
+    PSD = PS - PS[1]
+    
+    KSD = KS - KS[1]
+    
+    TotalED = PSD+KSD+egylistD
+
+    try:
+        VTimeStamp = TimeStamp
+    except NameError:
+        VTimeStamp = str('Debug')
+    
+    AnimName = '{}{}{}{}'.format(save_path,"/AnimSummary_",VTimeStamp,'.mp4')
+    
+    if ToFile:
+        print("Saving ",AnimName)
+    
+    
+    # Defining Grid System and Plotting Variables
+    
+    NumSol = len(solitons)
+    
+    figAS = plt.figure(figsize=(MovieX, MovieY))
+    gs = figAS.add_gridspec(4, 4)
+    
+    AS_GradGraph = figAS.add_subplot(gs[0, :])
+    AS_GradGraph.set_title('Acceleration of Particle #1')
+    
+    AS_FieldPlane = figAS.add_subplot(gs[1:3,0:2])
+    AS_FieldPlane.set_title('2D Gravitational Field')
+    
+    AS_RhoPlane = figAS.add_subplot(gs[1:3, 2:4])
+    AS_RhoPlane.set_title('2D Mass Density')
+    
+    
+    AS_EDelta = figAS.add_subplot(gs[3, :])
+    AS_EDelta.set_title('Energy Change Snapshot #1')
+    
+    
+    AS_FieldPlane.set_aspect('equal')
+    
+    if Loga:
+        
+        if Uniform:
+            data0 = np.log(np.array(data)/Density)
+            print("Initial Field is Uniform. Evaluating Change Ratio.")
+        
+        else:
+            data0 = np.log(data)
+            
+        planemax = np.max(data0)
+        planemin = -50
+        
+        print("Using Log Plot, the Contour Level Limits Are")
+        print(planemax,planemin)
+        
+    else:
+        data0 = (data)
+        planemax = np.max(data0)
+        planemin = np.min(data0)
+        
+            
+    levels = np.linspace(planemin, planemax, int(resol/2))
+    
+    PlotRange = np.linspace(-length/2, length/2,resol,endpoint = False)
+    
+    BarLabels = ['Total Energy', 'Mass Kinetic Energy', 'ULDM Total Energy']
+    
+    BarX = np.arange(len(BarLabels))  # the label locations
+    
+    BarMax = np.max(np.abs(TotalED))
+        
+    graddataP = (graddata)
+    
+    
+    DTEMaxChange = 0.
+    DTEMinChange = 0.
+    
+    def animateAS(i,DTEMaxChange,DTEMinChange):
+        
+        if Skip != 1 and i == 0:
+            print("We are skipping some frames.")
+        i = int(Skip*i-1)
+    
+        # Acceleration Graph
+    
+        AS_GradGraph.plot(i,graddataP[i][0],'r.',label = '$x$')
+        AS_GradGraph.plot(i,graddataP[i][1],'g.',label = '$y$')
+        AS_GradGraph.plot(i,graddataP[i][2],'b.',label = '$z$')
+       
+        
+        # Field Graph
+        
+        sliced = phidata[i]
+    
+        AS_FieldPlane.imshow(sliced,origin='lower')
+    
+        AS_FieldPlane.set_xticks([])
+        AS_FieldPlane.set_yticks([])
+        
+        # Density Graph
+        
+        AS_RhoPlane.cla()
+        AS_RhoPlane.set_aspect('equal')
+        
+        AS_RhoPlane.set_xticks([])
+        AS_RhoPlane.set_yticks([])
+        
+        AS_RhoPlane.set_xlim([-length/2,length/2])
+        AS_RhoPlane.set_ylim([-length/2,length/2])
+        AS_RhoPlane.get_xaxis().set_ticks([])
+        AS_RhoPlane.get_yaxis().set_ticks([])
+        
+        AS_RhoPlane.contour(PlotRange,PlotRange,data0[i], levels=levels, vmin=planemin, vmax=planemax,cmap = 'coolwarm')
+    
+    
+        TMStateLoc = TMdata[i]
+        for particleID in range(len(particles)):
+            Vx = TMStateLoc[int(6*particleID+3)]
+            Vy = TMStateLoc[int(6*particleID+4)]
+            Vz = TMStateLoc[int(6*particleID+5)]
+            
+    
+            TMx = TMStateLoc[int(6*particleID)]
+            TMy = TMStateLoc[int(6*particleID+1)]
+            TMz = TMStateLoc[int(6*particleID+2)]
+            
+    
+            AS_RhoPlane.plot([TMy],[TMx],'ko')
+            AS_RhoPlane.quiver([TMy],[TMx],[Vy],[Vx])
+            
+            
+        # Bar Graph
+    
+        AS_EDelta.cla()
+        
+        DTE = TotalED[i]
+        DKE = KSD[i]
+        DUE = egylistD[i]
+        
+        DTEMaxChange = np.max([DTEMaxChange,DTE])
+        DTEMinChange = np.min([DTEMinChange,DTE])
+        
+        EnergyEntry = [DTE, DKE, DUE]
+        
+        rects1 = AS_EDelta.bar(BarX, EnergyEntry, BarWidth)
+    
+        zeroLine = AS_EDelta.plot((-0.5,2.5),(0,0),'k--')
+        
+        maxLine = AS_EDelta.plot((-0.5,2.5),(DTEMaxChange,DTEMaxChange),'r-.')
+        
+        minLine = AS_EDelta.plot((-0.5,2.5),(DTEMinChange,DTEMinChange),'b-.')
+    
+        # Add some text for labels, title and custom x-axis tick labels, etc.
+        AS_EDelta.set_ylabel('Absolute Change Since Onset ($\mathcal{E}$)')
+        AS_EDelta.set_ylim(-2*BarMax,2*BarMax)
+        AS_EDelta.set_title('Energy Change for Snapshot %.0f'%i)
+        AS_EDelta.set_xticks(BarX)
+        AS_EDelta.set_xticklabels(BarLabels)
+    
+    
+        
+        
+        
+        if i%FPS == 0 and i!= 0:
+            print('Animated %.0f seconds out of %.2f seconds of data.' % (i/FPS, EndNum/FPS))
+        
+        if i == EndNum-1:
+            clear_output()
+            print('Animation Complete:', AnimName)
+    
+            
+    interval = 0.00001 #in seconds
+    aniAS = matplotlib.animation.FuncAnimation(figAS,animateAS,int(EndNum/Skip),fargs=(DTEMaxChange,DTEMinChange),interval=interval*1e+3,blit=False)
+    
+    Writer = matplotlib.animation.writers['ffmpeg']
+    
+    writer = Writer(fps=FPS, metadata=dict(artist='PyUltraLightF'))
+    
+    if ToFile:
+        aniAS.save(AnimName, writer=writer)
+    else:
+        from IPython.display import HTML
+        animated_plot0 = HTML(aniAS.to_jshtml())
+        figAS.clear()
+        display(animated_plot0) 
