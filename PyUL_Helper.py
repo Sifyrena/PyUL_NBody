@@ -7,7 +7,7 @@ Created on Wed Oct 21 13:56:50 2020
 
 """
 
-D_version = 'Helper Build 2a. Using Object-Oriented Approach. 22 Oct 2020'
+D_version = 'Helper Build 2b. Using Object-Oriented Approach. 22 Oct 2020'
 
 print(D_version)
 
@@ -109,7 +109,7 @@ def get_size(start_path):
 def Load_Latest(save_path):
     
     
-    with open('{}{}'.format(save_path, '/timestamp.txt'), 'r') as timestamp:
+    with open('{}{}{}'.format('./',save_path, '/latest.txt'), 'r') as timestamp:
         ts = timestamp.read()
         print('PyUL NBody: Loading Folder',ts)
         
@@ -497,9 +497,6 @@ def GenerateConfig(central_mass, length, length_units, resol, duration, duration
                 talt[i - 3] = tm[i]
         timestamp = '{}{}{}{}{}{}{}{}{}{}{}{}{}'.format(tm[0], '.', tm[1], '.', tm[2], '_', talt[0], '_', talt[1], '_', talt[2], '_', resol)
         
-        file = open('{}{}{}'.format('./', save_path, '/timestamp.txt'), "w+")
-        file.write(timestamp)
-        
         os.makedirs('{}{}{}{}'.format('./', save_path, '/', timestamp))
         
         
@@ -574,7 +571,7 @@ def GenerateConfig(central_mass, length, length_units, resol, duration, duration
         with open('{}{}{}{}{}'.format('./', save_path, '/', timestamp, '/config.txt'), "w+") as outfile:
             json.dump(Conf_data, outfile,indent=4)
             
-        return '{}{}{}{}'.format('./', save_path, '/', timestamp)
+        return timestamp
     
 
 def LoadConfig(loc):
@@ -721,7 +718,7 @@ def AnimSummary(TimeStamp,save_path, VX,VY,FPS,Loga,Skip,ToFile):
     except NameError:
         VTimeStamp = str('Debug')
     
-    AnimName = '{}{}{}{}'.format(save_path,"/AnimSummary_",VTimeStamp,'.mp4')
+    AnimName = '{}{}{}{}{}'.format("./",save_path,"/AnimSummary_",VTimeStamp,'.mp4')
     
     if ToFile:
         print("Saving ",AnimName)
@@ -787,6 +784,9 @@ def AnimSummary(TimeStamp,save_path, VX,VY,FPS,Loga,Skip,ToFile):
     DTEMaxChange = 0.
     DTEMinChange = 0.
     
+    phimax = np.max(phidata)
+    phimin = np.min(phidata)
+    
     def animateAS(i,DTEMaxChange,DTEMinChange):
         
         if Skip != 1 and i == 0:
@@ -799,12 +799,11 @@ def AnimSummary(TimeStamp,save_path, VX,VY,FPS,Loga,Skip,ToFile):
         AS_GradGraph.plot(i,graddataP[i][1],'g.',label = '$y$')
         AS_GradGraph.plot(i,graddataP[i][2],'b.',label = '$z$')
        
-        
         # Field Graph
         
         sliced = phidata[i]
     
-        AS_FieldPlane.imshow(sliced,origin='lower')
+        AS_FieldPlane.imshow(sliced,origin='lower',vmin = phimin, vmax = phimax)
     
         AS_FieldPlane.set_xticks([])
         AS_FieldPlane.set_yticks([])
@@ -869,9 +868,7 @@ def AnimSummary(TimeStamp,save_path, VX,VY,FPS,Loga,Skip,ToFile):
         AS_EDelta.set_xticks(BarX)
         AS_EDelta.set_xticklabels(BarLabels)
     
-    
-        
-        
+
         
         if i%FPS == 0 and i!= 0:
             print('Animated %.0f seconds out of %.2f seconds of data.' % (i/FPS, EndNum/FPS))
