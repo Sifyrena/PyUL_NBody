@@ -7,7 +7,7 @@ Created on Wed Oct 21 13:56:50 2020
 
 """
 
-D_version = 'Helper Build 3. 31 Oct 2020'
+D_version = 'Helper Build 2b. Using Object-Oriented Approach. 22 Oct 2020'
 
 print(D_version)
 
@@ -487,26 +487,15 @@ def Load_Config(configpath):
        
 def GenerateConfig(central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_path, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, Uniform,Density,a, NCV,NCW
            ):
-    
         tm = time.localtime()
-
-
-        print("What is the name of the run? Leave blank to use automatically generated timestamp.")
-        InputName = input()
         
-        if InputName != "":
-            
-            timestamp = InputName
-            
-        else:
-            
-            talt = ['0', '0', '0']
-            for i in range(3, 6):
-                if tm[i] in range(0, 10):
-                    talt[i - 3] = '{}{}'.format('0', tm[i])
-                else:
-                    talt[i - 3] = tm[i]
-            timestamp = '{}{}{}{}{}{}{}{}{}{}{}{}{}'.format(tm[0], '.', tm[1], '.', tm[2], '_', talt[0], '_', talt[1], '_', talt[2], '_', resol)
+        talt = ['0', '0', '0']
+        for i in range(3, 6):
+            if tm[i] in range(0, 10):
+                talt[i - 3] = '{}{}'.format('0', tm[i])
+            else:
+                talt[i - 3] = tm[i]
+        timestamp = '{}{}{}{}{}{}{}{}{}{}{}{}{}'.format(tm[0], '.', tm[1], '.', tm[2], '_', talt[0], '_', talt[1], '_', talt[2], '_', resol)
         
         os.makedirs('{}{}{}{}'.format('./', save_path, '/', timestamp))
         
@@ -585,20 +574,6 @@ def GenerateConfig(central_mass, length, length_units, resol, duration, duration
         return timestamp
     
 
-def Runs(save_path):
-    runs = os.listdir(save_path)
-    runs.sort()
-
-    for i in range(len(runs)):
-        print("[",i,"]: ", runs[i] )
-        
-    print("Which Folder Do You Want to Run? Enter to run latest.")
-    
-    Ind = int(input() or len(runs)-1)
-   
-    
-    return runs[Ind]
-    
 def LoadConfig(loc):
         
         configfile = loc + '/config.txt'

@@ -1,6 +1,5 @@
 # PyUL_NBody
-
-D_version = str('2020 10 31, Robust NBody')
+# Now Everything Belongs In A Class
 
 import time
 from datetime import datetime
@@ -113,6 +112,7 @@ def LoadConfig(loc):
 
 
 
+D_version = str('2020 10 29, NBody with Integration Mode Switch')
 
 hbar = 1.0545718e-34  # m^2 kg/s
 parsec = 3.0857e16  # m
