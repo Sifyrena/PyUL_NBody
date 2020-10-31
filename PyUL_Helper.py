@@ -589,12 +589,20 @@ def Runs(save_path):
     runs = os.listdir(save_path)
     runs.sort()
 
-    for i in range(len(runs)):
-        print("[",i,"]: ", runs[i] )
-        
-    print("Which Folder Do You Want to Run? Enter to run latest.")
     
-    Ind = int(input() or len(runs)-1)
+    for i in range(len(runs)):
+        
+        if os.path.isdir(os.path.join(save_path, runs[i])):
+            
+    
+        
+            print("[",i,"]: ", runs[i] )
+            
+            LS = i
+        
+    print("Which Folder Do You Want to Run? Leave blank to run the last one.")
+    
+    Ind = int(input() or LS)
    
     
     return runs[Ind]
