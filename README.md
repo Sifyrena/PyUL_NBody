@@ -1,6 +1,6 @@
 ![Project Logo](https://github.com/Sifyrena/PyUL_NBody/blob/master/Project_Logo.pdf)
 
-# Build 0.21g-h-i-j + (21 Oct 2020)
+# Build 0.22 (21 Oct 2020)
 
 ### Requires Integrator Version No Eariler than *21 Oct 2020*
 
