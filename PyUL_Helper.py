@@ -7,7 +7,7 @@ Created on Wed Oct 21 13:56:50 2020
 
 """
 
-D_version = 'Helper Build 3. 31 Oct 2020'
+D_version = 'Helper Build 4. 18 Nov 2020'
 
 print(D_version)
 
@@ -18,7 +18,6 @@ import time
 import json
 
 def SSEst(save_options, save_number, resol):
-    
     
     save_rho = save_options[0]
     
@@ -38,30 +37,30 @@ def SSEst(save_options, save_number, resol):
     PreMult = 0
     
     if save_rho:
-        print('PyUL NBody: Saving Mass Density Data (3D)')
+        print('ULHelper: Saving Mass Density Data (3D)')
         PreMult = PreMult + resol**3
         
     if save_psi:
-        print('PyUL NBody: Saving Complex Field Data (3D)')
+        print('ULHelper: Saving Complex Field Data (3D)')
         PreMult = PreMult + resol**3*2
         
     if save_phi:
-        print('PyUL NBody: Saving Gravitational Field Data (3D)')
+        print('ULHelper: Saving Gravitational Field Data (3D)')
         PreMult = PreMult + resol**3
         
     if save_plane:
-        print('PyUL NBody: Saving Mass Density Data (2D)')
+        print('ULHelper: Saving Mass Density Data (2D)')
         PreMult = PreMult + resol**2
         
     if save_phi_plane:
-        print('PyUL NBody: Saving Gravitational Field Data (2D)')
+        print('ULHelper: Saving Gravitational Field Data (2D)')
         PreMult = PreMult + resol**2
     
     if save_gradients:
-        print('PyUL NBody: Saving NBody Gradient Data')
+        print('ULHelper: Saving NBody Gradient Data')
     
     if save_testmass:
-        print('PyUL NBody: Saving NBody Position Data')
+        print('ULHelper: Saving NBody Position Data')
     
     return (save_number+1)*(PreMult)*8/(1024**3)
     
@@ -111,7 +110,7 @@ def Load_Latest(save_path):
     
     with open('{}{}{}'.format('./',save_path, '/latest.txt'), 'r') as timestamp:
         ts = timestamp.read()
-        print('PyUL NBody: Loading Folder',ts)
+        print('ULHelper: Loading Folder',ts)
         
         return ts
     
@@ -151,13 +150,13 @@ def Load_Data(save_path,ts,save_options,save_number):
     
     
     if save_plane:
-        print('PyUL NBody: Loaded Planar Mass Density Data \n')
+        print('ULHelper: Loaded Planar Mass Density Data \n')
     if save_testmass:
-        print('PyUL NBody: Loaded Test Mass State Data \n')
+        print('ULHelper: Loaded Test Mass State Data \n')
     if save_phi_plane:
-        print('PyUL NBody: Loaded Planar Gravitational Field Data \n')
+        print('ULHelper: Loaded Planar Gravitational Field Data \n')
     if save_gradients:
-        print('PyUL NBody: Loaded Test Mass Gradient Data \n')
+        print('ULHelper: Loaded Test Mass Gradient Data \n')
 
     
     for x in np.arange(0,save_number+1,1):
@@ -184,7 +183,7 @@ def Load_Data(save_path,ts,save_options,save_number):
 
             break
         
-    print("PyUL NBody: Loaded", EndNum, "Data Entries")
+    print("ULHelper: Loaded", EndNum, "Data Entries")
     return EndNum, data,  TMdata, phidata,    graddata
 
 
@@ -445,7 +444,7 @@ def Init(Settings,CustomParticles,CustomSolitons,resol,clength):
         
     else:
         
-        print("Loading Custom Settings")
+        print("ULHelper: Loading Custom Settings")
         particles = CustomParticles
         solitons = CustomSolitons
         
@@ -709,7 +708,7 @@ def AnimSummary(TimeStamp,save_path, VX,VY,FPS,Loga,Skip,ToFile):
         particle = particles[i]
         
         mass = particle[0]
-        
+                
         ML.append(mass)
     
         print(ML)
@@ -726,6 +725,8 @@ def AnimSummary(TimeStamp,save_path, VX,VY,FPS,Loga,Skip,ToFile):
             r = Data[0:2] - Data[6:8]
     
             rN = np.linalg.norm(r)
+            m1 = ML[0]
+            m2 = ML[1]
         
             PS[i] = -1*m1*m2*a/(a*rN+np.exp(-1*a*rN))
        
