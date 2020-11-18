@@ -1,15 +1,5 @@
 ![Project Logo](https://github.com/Sifyrena/PyUL_NBody/blob/master/Project_Logo.pdf)
 
-# Build 0.22 (21 Oct 2020)
-
-### Requires Integrator Version No Eariler than *21 Oct 2020*
-
-### This is a Public Release
-* Y. Wang: [yourong.f.wang@auckland.ac.nz]
-
-* J. Zagorac
-* R. Easther
-
 # PyUL_NBody
 PyUltraLight NBody Addon Scheme
 
