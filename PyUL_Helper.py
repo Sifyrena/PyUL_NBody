@@ -7,9 +7,11 @@ Created on Wed Oct 21 13:56:50 2020
 
 """
 
-D_version = 'Helper Build 4. 18 Nov 2020'
+D_version = 'Helper Build 5. 25 Nov 2020'
 
 print(D_version)
+
+print('PyULH Warning: This version is not compatible with PyULH Version 4 or earlier.')
 
 import os
 import matplotlib.pyplot as plt
@@ -33,6 +35,8 @@ def SSEst(save_options, save_number, resol):
     
     save_testmass = save_options[5]
     
+    save_phase_plane = save_options[9]
+    
     
     PreMult = 0
     
@@ -50,6 +54,10 @@ def SSEst(save_options, save_number, resol):
         
     if save_plane:
         print('ULHelper: Saving Mass Density Data (2D)')
+        PreMult = PreMult + resol**2
+        
+    if save_phase_plane:
+        print('ULHelper: Saving ULD Argument Data (2D)')
         PreMult = PreMult + resol**2
         
     if save_phi_plane:
@@ -122,6 +130,7 @@ def Load_Data(save_path,ts,save_options,save_number):
     TMdata = []
     phidata = []
     graddata = []
+    phasedata = []
     
     
     save_rho = save_options[0]
@@ -135,6 +144,8 @@ def Load_Data(save_path,ts,save_options,save_number):
     save_plane = save_options[2]
     
     save_gradients = save_options[8]
+    
+    save_phase_plane = save_options[9]
     
     save_testmass = save_options[5]
     
@@ -157,6 +168,9 @@ def Load_Data(save_path,ts,save_options,save_number):
         print('ULHelper: Loaded Planar Gravitational Field Data \n')
     if save_gradients:
         print('ULHelper: Loaded Test Mass Gradient Data \n')
+    if save_phase_plane:
+        print('ULHelper: Loaded Planar ULD Phase Data \n')
+        
 
     
     for x in np.arange(0,save_number+1,1):
@@ -174,6 +188,9 @@ def Load_Data(save_path,ts,save_options,save_number):
                 
             if save_gradients:
                 graddata.append(np.load('{}{}{}{}'.format(loc, '/Gradients_#', x, '.npy')))
+                
+            if save_phase_plane:
+                phasedata.append(np.load('{}{}{}{}'.format(loc, '/Arg2D_#', x, '.npy')))
             
             EndNum += 1
         
@@ -184,20 +201,17 @@ def Load_Data(save_path,ts,save_options,save_number):
             break
         
     print("ULHelper: Loaded", EndNum, "Data Entries")
-    return EndNum, data,  TMdata, phidata,    graddata
+    return EndNum, data,  TMdata, phidata,    graddata, phasedata
 
 
 def SmoothingReport(a,resol,clength):
     
 
     GridLenFS = clength/(resol)
-
-
-    
-    fig_grav = plt.figure(figsize=(10, 10))
+   
+    fig_grav = plt.figure(figsize=(12, 12))
 
     # Diagnostics For Field Smoothing
-    
     
     ax1 = plt.subplot(211)
     ax2 = plt.subplot(212)
@@ -262,7 +276,6 @@ def Init(Settings,CustomParticles,CustomSolitons,resol,clength):
     if Settings[0]:
         print("Loading 2-Body Parabola Demo \n")
         
-
         print("Initial x Location of Particle 1 (First Quadrant Only) \n")
 
         x0 = float(input("x0 ") or "1")
@@ -484,7 +497,7 @@ def Load_Config(configpath):
         print(config)
     
        
-def GenerateConfig(central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_path, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, Uniform,Density,a, NCV,NCW
+def GenerateConfig(NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_path, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, Uniform,Density,density_unit,a, NCV,NCW
            ):
     
         tm = time.localtime()
@@ -529,7 +542,8 @@ def GenerateConfig(central_mass, length, length_units, resol, duration, duration
         Conf_data['Spacial Resolution'] = resol
         
         Conf_data['Temporal Step Factor'] = step_factor
-    
+        
+        Conf_data['RK Steps'] = NS
         
         Conf_data['Duration'] = ({
                 'Time Duration': duration,
@@ -573,6 +587,7 @@ def GenerateConfig(central_mass, length, length_units, resol, duration, duration
         Conf_data['Uniform Field Override'] = ({
                 
                 'Flag': Uniform,
+                'Density Unit': density_unit,
                 'Density Value': Density
                 
                 })
@@ -587,105 +602,29 @@ def GenerateConfig(central_mass, length, length_units, resol, duration, duration
 def Runs(save_path):
     runs = os.listdir(save_path)
     runs.sort()
-
     
+    FLog = 0
+    Log = [FLog]
     for i in range(len(runs)):
         
         if os.path.isdir(os.path.join(save_path, runs[i])):
             
-    
-        
-            print("[",i,"]: ", runs[i] )
+            FLog += 1
+            Log.append(i)
+            print("[",FLog,"]: ", runs[i] )
             
-            LS = i
         
-    print("Which Folder Do You Want to Run? Leave blank to run the last one.")
+    print("Which folder do you want to analyse? Blank to load the latest one.")
     
-    Ind = int(input() or LS)
-   
+    Ind = int(input() or -1)
     
-    return runs[Ind]
+    if Ind == -1:
+        return Load_Latest(save_path)
+    else:
+        Ind = Log[Ind]
+        print(f"ULHelper: You chose to load {runs[Ind]}")
+        return runs[Ind]
     
-def LoadConfig(loc):
-        
-        configfile = loc + '/config.txt'
-        
-        with open(configfile) as json_file:
-            config = json.load(json_file)
-        
-        central_mass = config["Central Mass"]
-        
-        ### Simulation Stuff
-        
-        save_options = config["Save Options"]["flags"]
-        
-        save_path = config["Save Options"]["folder"]
-        
-        hdf5 = config["Save Options"]["hdf5"]
-        
-        npy = config["Save Options"]["npy"]
-        
-        npz = config["Save Options"]["npz"]
-        
-        save_number = config["Save Options"]["number"]
-        
-        ### Time Stuff
-        
-        duration = config["Duration"]['Time Duration']
-        
-        start_time = config["Duration"]['Start Time']
-        
-        duration_units = config["Duration"]['Time Units']
-        
-        step_factor = float(config["Temporal Step Factor"])
-        
-        ### Space Stuff
-        
-        a = config["Field Smoothing"]
-        
-        resol = int(config["Spacial Resolution"])
-        
-        length = config["Simulation Box"]["Box Length"]
-        
-        length_units = config["Simulation Box"]["Length Units"]
-        
-        
-        ### Black Hole Stuff
-        
-        particles = config["Matter Particles"]['Condition']
-        
-        m_mass_unit = config["Matter Particles"]['Mass Units']
-        
-        m_position_unit = config["Matter Particles"]['Position Units']
-        
-        m_velocity_unit = config["Matter Particles"]['Velocity Units']
-        
-        
-        ### ULDM Stuff
-        
-        solitons = config["ULDM Solitons"]['Condition']
-        
-        s_mass_unit = config["ULDM Solitons"]['Mass Units']
-        
-        s_position_unit = config["ULDM Solitons"]['Position Units']
-        
-        s_velocity_unit = config["ULDM Solitons"]['Velocity Units']
-        
-        
-        ### ULDM Modifier
-        
-        Uniform = config["Uniform Field Override"]["Flag"]
-        Density = config["Uniform Field Override"]["Density Value"]
-        
-        
-        ### Field Averaging
-        
-        NCV = np.array(config["Field-averaging Probes"]["Probe Array"])
-        NCW = np.array(config["Field-averaging Probes"]["Probe Weights"])
-        
-         
-        return  central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_path, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, Uniform,Density,a, NCV,NCW
-
 
 def AnimSummary(TimeStamp,save_path, VX,VY,FPS,Loga,Skip,ToFile):
     import matplotlib.animation

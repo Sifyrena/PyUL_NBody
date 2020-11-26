@@ -940,7 +940,7 @@ def LoadSoliton(Profile):
     
     print(f"\n{Version} Init: Loaded original PyUL soliton profiles.")
     
-    return f
+    return f, 3.883, 2.454
     
 ######################### With Built-in I/O Management
 def evolve(save_path,run_folder,Method,NS):
@@ -1072,8 +1072,8 @@ def evolve(save_path,run_folder,Method,NS):
     
     # INITIALISE SOLITONS WITH SPECIFIED MASS, POSITION, VELOCITY, PHASE
 
-
-    f = LoadSoliton('./Soliton Profile Files/initial_f.npy')
+    ######### CUSTOM INFORMATION #########
+    f, prealpha, prebeta = LoadSoliton('./Soliton Profile Files/initial_f.npy')
     
     for k in range(NumSol):
         if (k != 0):
@@ -1087,8 +1087,8 @@ def evolve(save_path,run_folder,Method,NS):
         position = convert(np.array(s[1]), s_position_unit, 'l')
         velocity = convert(np.array(s[2]), s_velocity_unit, 'v')
         # Note that alpha and beta parameters are computed when the initial_f.npy soliton profile file is generated.
-        alpha = (mass / 3.883) ** 2
-        beta = 2.454
+        alpha = (mass / prealpha) ** 2
+        beta = prebeta
         phase = s[3]
         funct = initsoliton_jit(funct, xarray, yarray, zarray, position, alpha, f, delta_x)
         ####### Impart velocity to solitons in Galilean invariant way
