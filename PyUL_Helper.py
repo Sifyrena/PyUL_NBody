@@ -518,7 +518,7 @@ def GenerateConfig(NS, central_mass, length, length_units, resol, duration, dura
                     talt[i - 3] = '{}{}'.format('0', tm[i])
                 else:
                     talt[i - 3] = tm[i]
-            timestamp = '{}{}{}{}{}{}{}{}{}{}{}{}{}'.format(tm[0], '.', tm[1], '.', tm[2], '_', talt[0], '_', talt[1], '_', talt[2], '_', resol)
+            timestamp = '{}{}{}{}{}{}{}{}{}{}{}{}{}'.format(tm[0], '', tm[1], '', tm[2], '_', talt[0], '', talt[1], '', talt[2], '@', resol)
         
         os.makedirs('{}{}{}{}'.format('./', save_path, '/', timestamp))
         
@@ -624,7 +624,93 @@ def Runs(save_path):
         Ind = Log[Ind]
         print(f"ULHelper: You chose to load {runs[Ind]}")
         return runs[Ind]
-    
+
+def LoadConfig(loc):
+        
+        configfile = loc + '/config.txt'
+        
+        with open(configfile) as json_file:
+            config = json.load(json_file)
+        
+        central_mass = config["Central Mass"]
+        
+        ### Simulation Stuff
+        
+        save_options = config["Save Options"]["flags"]
+        
+        save_path = config["Save Options"]["folder"]
+        
+        hdf5 = config["Save Options"]["hdf5"]
+        
+        npy = config["Save Options"]["npy"]
+        
+        npz = config["Save Options"]["npz"]
+        
+        save_number = config["Save Options"]["number"]
+        
+        ### Time Stuff
+        
+        duration = config["Duration"]['Time Duration']
+        
+        start_time = config["Duration"]['Start Time']
+        
+        duration_units = config["Duration"]['Time Units']
+        
+        NS = int(config["RK Steps"])
+        
+        step_factor = float(config["Temporal Step Factor"])
+        
+        ### Space Stuff
+        
+        a = config["Field Smoothing"]
+        
+        resol = int(config["Spacial Resolution"])
+        
+        length = config["Simulation Box"]["Box Length"]
+        
+        length_units = config["Simulation Box"]["Length Units"]
+        
+        
+        ### Black Hole Stuff
+        
+        particles = config["Matter Particles"]['Condition']
+        
+        m_mass_unit = config["Matter Particles"]['Mass Units']
+        
+        m_position_unit = config["Matter Particles"]['Position Units']
+        
+        m_velocity_unit = config["Matter Particles"]['Velocity Units']
+        
+        
+        ### ULDM Stuff
+        
+        solitons = config["ULDM Solitons"]['Condition']
+        
+        s_mass_unit = config["ULDM Solitons"]['Mass Units']
+        
+        s_position_unit = config["ULDM Solitons"]['Position Units']
+        
+        s_velocity_unit = config["ULDM Solitons"]['Velocity Units']
+        
+        
+        ### ULDM Modifier
+        
+        Uniform = config["Uniform Field Override"]["Flag"]
+        density_unit = config["Uniform Field Override"]["Density Unit"]
+        Density = config["Uniform Field Override"]["Density Value"]
+        
+        
+        
+        ### Field Averaging
+        
+        NCV = np.array(config["Field-averaging Probes"]["Probe Array"])
+        NCW = np.array(config["Field-averaging Probes"]["Probe Weights"])
+        
+         
+        return  NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_path, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, Uniform,Density, density_unit,a, NCV,NCW
+
+
+
 
 def AnimSummary(TimeStamp,save_path, VX,VY,FPS,Loga,Skip,ToFile):
     import matplotlib.animation
@@ -637,9 +723,9 @@ def AnimSummary(TimeStamp,save_path, VX,VY,FPS,Loga,Skip,ToFile):
 
     loc = save_path + '/' + TimeStamp
     
-    central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_path, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, Uniform,Density,a, NCV,NCW = LoadConfig(loc)
+    NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_path, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, Uniform,Density, density_unit,a, NCV,NCW = LoadConfig(loc)
     
-    EndNum, data, TMdata, phidata, graddata = Load_Data(save_path,TimeStamp, save_options,save_number)
+    EndNum, data, TMdata, phidata, graddata, argdata = Load_Data(save_path,TimeStamp, save_options,save_number)
     
     
     ML = []
