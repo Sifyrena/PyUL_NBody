@@ -1,23 +1,16 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Oct 21 13:56:50 2020
-
-@author: ywan598
-
-"""
-
-D_version = 'Helper Build 5. 25 Nov 2020'
+Version   = str('ULHelper') # Handle used in console.
+D_version = str('Helper Build 2020 12 01') # Detailed Version
+S_version = 6 # Short Version
 
 print(D_version)
-
-print('PyULH Warning: This version is not compatible with PyULH Version 4 or earlier.')
 
 import os
 import matplotlib.pyplot as plt
 import numpy as np
 import time
 import json
+
+
 
 def SSEst(save_options, save_number, resol):
     
@@ -495,9 +488,31 @@ def Load_Config(configpath):
     with open(configpath, 'r') as configfile:
         config = configfile.read()
         print(config)
+
+        
+def EmbedParticle(particles,embeds):
     
+    EI = 0
+    
+    for Mollusk in embeds:
+        
+        print(f"ULHelper: Calculating and loading the mass of embedded particle #{EI}.")
+        
+        Mass = Mollusk[0]*Mollusk[3]
+        
+        Pearl = [Mass,Mollusk[1],Mollusk[2]]
+        
+        if not (Pearl in particles):
+            particles.append(Pearl)
+            
+        EI += 1
+        
+    
+    return particles
+        
        
-def GenerateConfig(NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_path, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, Uniform,Density,density_unit,a, NCV,NCW
+    
+def GenerateConfig(NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_path, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles,embeds, Uniform,Density,density_unit,a, NCV,NCW
            ):
     
         tm = time.localtime()
@@ -560,10 +575,14 @@ def GenerateConfig(NS, central_mass, length, length_units, resol, duration, dura
         
         Conf_data['ULDM Solitons'] = ({
         'Condition': solitons,
+        'Embedded': embeds,
         'Mass Units': s_mass_unit,
         'Position Units': s_position_unit,
         'Velocity Units': s_velocity_unit
         })
+        
+        
+        particles = EmbedParticle(particles,embeds)
         
         Conf_data['Matter Particles'] = ({
         'Condition': particles,
@@ -595,6 +614,8 @@ def GenerateConfig(NS, central_mass, length, length_units, resol, duration, dura
         
         with open('{}{}{}{}{}'.format('./', save_path, '/', timestamp, '/config.txt'), "w+") as outfile:
             json.dump(Conf_data, outfile,indent=4)
+            
+        print('ULHelper: Compiled Config in Folder', timestamp)
             
         return timestamp
     
@@ -686,6 +707,8 @@ def LoadConfig(loc):
         
         solitons = config["ULDM Solitons"]['Condition']
         
+        embeds = config["ULDM Solitons"]['Embedded']
+        
         s_mass_unit = config["ULDM Solitons"]['Mass Units']
         
         s_position_unit = config["ULDM Solitons"]['Position Units']
@@ -707,9 +730,63 @@ def LoadConfig(loc):
         NCW = np.array(config["Field-averaging Probes"]["Probe Weights"])
         
          
-        return  NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_path, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, Uniform,Density, density_unit,a, NCV,NCW
+        return  NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_path, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, embeds, Uniform,Density, density_unit,a, NCV,NCW
 
 
+
+def NBodyEnergy(particles,EndNum,TMdata,m_mass_unit,a):
+    NBo = len(particles)
+    ML = []
+    for i in range(NBo):
+        particle = particles[i]
+
+        mass = particle[0]
+        
+        ML.append(mass)
+
+        print(ML)
+    
+
+    KS = np.zeros(int(EndNum))
+    PS = np.zeros(int(EndNum))
+
+    print(len(particles))
+    for i in range(int(EndNum)):
+
+        Data = TMdata[i]
+
+
+        if len(particles)>=2:
+
+
+            for Mass1 in range(NBo):
+
+                Index1 = int(Mass1*6)
+                Position1 = Data[Index1:Index1+2]
+                m1 = ML[Mass1]
+
+                for Mass2 in range (Mass1+1,NBo,1):
+                    Index2 = int(Mass2*6)
+                    Position2 = Data[Index2:Index2+2]
+                    m2 = ML[Mass2]
+
+                    r = Position1 - Position2
+
+                    rN = np.linalg.norm(r)
+
+                    PS[i] = PS[i] - 1*m1*m2*a/(a*rN+np.exp(-1*a*rN))
+
+
+
+        for particleID in range(NBo):
+            Vx = Data[int(6*particleID+3)]
+            Vy = Data[int(6*particleID+4)]
+            Vz = Data[int(6*particleID+5)]
+
+            KS[i] = KS[i] + 1/2*ML[particleID]*(Vx**2+Vy**2+Vz**2) 
+            
+            
+    return NBo, KS, PS
 
 
 def AnimSummary(TimeStamp,save_path, VX,VY,FPS,Loga,Skip,ToFile):
@@ -726,42 +803,9 @@ def AnimSummary(TimeStamp,save_path, VX,VY,FPS,Loga,Skip,ToFile):
     NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_path, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, Uniform,Density, density_unit,a, NCV,NCW = LoadConfig(loc)
     
     EndNum, data, TMdata, phidata, graddata, argdata = Load_Data(save_path,TimeStamp, save_options,save_number)
-    
-    
-    ML = []
-    for i in range(len(particles)):
-        particle = particles[i]
-        
-        mass = particle[0]
-                
-        ML.append(mass)
-    
-        print(ML)
 
-    KS = np.zeros(int(EndNum))
-    PS = np.zeros(int(EndNum))
-
-    for i in range(int(EndNum)):
-        
-        Data = TMdata[i]
-        
-        if len(particles)==2:
+    NBo, KS, PS = NBodyEnergy(particles,EndNum,TMdata,m_mass_unit,a)
     
-            r = Data[0:2] - Data[6:8]
-    
-            rN = np.linalg.norm(r)
-            m1 = ML[0]
-            m2 = ML[1]
-        
-            PS[i] = -1*m1*m2*a/(a*rN+np.exp(-1*a*rN))
-       
-        for particleID in range(len(particles)):
-            Vx = Data[int(6*particleID+3)]
-            Vy = Data[int(6*particleID+4)]
-            Vz = Data[int(6*particleID+5)]
-            
-            KS[i] = KS[i] + 1/2*ML[particleID]*(Vx**2+Vy**2+Vz**2) 
-
     egylist = np.load('{}{}'.format(loc, '/egylist.npy'))
   
     egylistD = egylist - egylist[1]
@@ -831,7 +875,7 @@ def AnimSummary(TimeStamp,save_path, VX,VY,FPS,Loga,Skip,ToFile):
     
     PlotRange = np.linspace(-length/2, length/2,resol,endpoint = False)
     
-    BarLabels = ['Total Energy', 'Mass Kinetic Energy', 'ULDM Total Energy']
+    BarLabels = ['Total Energy', 'NBody Total Energy', 'ULDM Total Energy']
     
     BarX = np.arange(len(BarLabels))  # the label locations
     
@@ -904,7 +948,7 @@ def AnimSummary(TimeStamp,save_path, VX,VY,FPS,Loga,Skip,ToFile):
         AS_EDelta.cla()
         
         DTE = TotalED[i]
-        DKE = KSD[i]
+        DKE = KSD[i]+PSD[i]
         DUE = egylistD[i]
         
         DTEMaxChange = np.max([DTEMaxChange,DTE])

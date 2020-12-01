@@ -1,7 +1,6 @@
-# PyUL_NBody
-
-D_version = str('2020 11 26. NBody Completion')
-Version   = str('PyULN8')
+Version   = str('PyUL8') # Handle used in console.
+D_version = str('Integrator Build 2020 12 01') # Detailed Version
+S_version = 8 # Short Version
 
 import time
 from datetime import datetime
@@ -15,6 +14,8 @@ import os
 import scipy.fftpack
 import multiprocessing
 import json
+
+import scipy.integrate as si
 
 try:
     import scipy.special.lambertw as LW
@@ -92,6 +93,8 @@ def LoadConfig(loc):
         
         solitons = config["ULDM Solitons"]['Condition']
         
+        embeds = config["ULDM Solitons"]['Embedded']
+        
         s_mass_unit = config["ULDM Solitons"]['Mass Units']
         
         s_position_unit = config["ULDM Solitons"]['Position Units']
@@ -113,11 +116,7 @@ def LoadConfig(loc):
         NCW = np.array(config["Field-averaging Probes"]["Probe Weights"])
         
          
-        return  NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_path, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, Uniform,Density, density_unit,a, NCV,NCW
-
-
-
-
+        return  NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_path, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, embeds, Uniform,Density, density_unit,a, NCV,NCW
 
 
 
@@ -994,17 +993,566 @@ def FloaterAdvanceI(TMState,h,masslist,NS,GxI,GyI,GzI,a,HWHM,NCV,NCW):
         return TMStateOut, GradientLog
 
 
+    
+######################### Soliton Init Factory Setting!
 
-def LoadSoliton(Profile):
+def LoadDefaultSoliton(Profile):
     
     f = np.load(Profile)
     
     print(f"\n{Version} Load Soliton: Loaded original PyUL soliton profiles.")
     
     return f
+
+######################### Soliton Init Factory Setting!
+
+def BHGuess(Ratio):
+    
+    
+    
+    LowGuess = 0
+    HighGuess = 1
+    return LowGuess, HighGuess
+
+def BHRatioTester(TargetRatio,Iter,Tol,BHMassGMin,BHMassGMax,Smoo):
+    
+    # FW Draft
+    
+    #Note that the spatial resolution of the profile must match the specification of delta_x in the main code.
+    dr = .01
+    max_radius = 10.0 
+    rge = max_radius/dr
+
+    Lambda = 0 # axion self-interaction strength. Lambda < 0: attractive.
+
+    s = 0. # Note that for large BH masses s may become positive.
+    nodes = [0] # Include here the number of nodes desired.
+    tolerance = 1e-5 # how close f(r) must be to 0 at r_max; can be changed
+
+    plot_while_calculating = False # If true, a figure will be updated for every attempted solution
+
+    verbose_output = False # If true, s value of every attempt will be printed in console.
+    
+    print(f"Starting experiment between {BHMassGMin} and {BHMassGMax}")
+    
+   
+    BHMassLo = BHMassGMin
+    BHMassHi = BHMassGMax
+    
+    BHMass = (BHMassLo+BHMassHi)/2
+    
+    BHmass = BHMass # give in code units.
+ 
+    s = 0
+    IterInt = 0
+    
+    while IterInt <= Iter:
+        
+        order = 0
+        
+        def g1(r, a, b, c, BHmass = BHMass):
+            return -(2/r)*c+2*b*a - 2*(Smoo*BHmass / (Smoo*r+np.exp(-Smoo*r)))*a + 2 * Lambda * a **3
+
+        def g2(r, a, d):
+            return 4*np.pi*a**2-(2/r)*d
+
+        optimised = False
+        tstart = time.time()
+
+        phi_min = -5 # lower phi-tilde value (i.e. more negative phi value)
+        phi_max = s
+        draw = 0
+        currentflag = 0
+
+        if plot_while_calculating == True:
+            plt.figure(1)
+
+        while optimised == False:
+            nodenumber = 0
+
+            ai = 1
+            bi = s
+            ci = 0
+            di = 0
+
+            la = []
+            lb = []
+            lc = []
+            ld = []
+            lr = []
+            intlist = []
+
+            la.append(ai)
+            lb.append(bi)
+            lc.append(ci)
+            ld.append(di)
+            lr.append(dr/1000)
+            intlist.append(0.)
+
+
+            # kn lists follow index a, b, c, d, i.e. k1[0] is k1a
+            k1 = []
+            k2 = []
+            k3 = []
+            k4 = []
+
+            if verbose_output == True:
+                print('0. s = ', s)
+            for i in range(int(rge)):
+                list1 = []
+                list1.append(lc[i]*dr)
+                list1.append(ld[i]*dr)
+                list1.append(g1(lr[i],la[i],lb[i],lc[i])*dr)
+                list1.append(g2(lr[i],la[i],ld[i])*dr)
+                k1.append(list1)
+
+                list2 = []
+                list2.append((lc[i]+k1[i][2]/2)*dr)
+                list2.append((ld[i]+k1[i][3]/2)*dr)
+                list2.append(g1(lr[i]+dr/2,la[i]+k1[i][0]/2,lb[i]+k1[i][1]/2,lc[i]+k1[i][2]/2)*dr)
+                list2.append(g2(lr[i]+dr/2,la[i]+k1[i][0]/2,ld[i]+k1[i][3]/2)*dr)
+                k2.append(list2)
+
+                list3 = []
+                list3.append((lc[i]+k2[i][2]/2)*dr)
+                list3.append((ld[i]+k2[i][3]/2)*dr)
+                list3.append(g1(lr[i]+dr/2,la[i]+k2[i][0]/2,lb[i]+k2[i][1]/2,lc[i]+k2[i][2]/2)*dr)
+                list3.append(g2(lr[i]+dr/2,la[i]+k2[i][0]/2,ld[i]+k2[i][3]/2)*dr)
+                k3.append(list3)
+
+                list4 = []
+                list4.append((lc[i]+k3[i][2])*dr)
+                list4.append((ld[i]+k3[i][3])*dr)
+                list4.append(g1(lr[i]+dr,la[i]+k3[i][0],lb[i]+k3[i][1],lc[i]+k3[i][2])*dr)
+                list4.append(g2(lr[i]+dr,la[i]+k3[i][0],ld[i]+k3[i][3])*dr)
+                k4.append(list4)
+
+                la.append(la[i]+(k1[i][0]+2*k2[i][0]+2*k3[i][0]+k4[i][0])/6)
+                lb.append(lb[i]+(k1[i][1]+2*k2[i][1]+2*k3[i][1]+k4[i][1])/6)
+                lc.append(lc[i]+(k1[i][2]+2*k2[i][2]+2*k3[i][2]+k4[i][2])/6)
+                ld.append(ld[i]+(k1[i][3]+2*k2[i][3]+2*k3[i][3]+k4[i][3])/6)
+                lr.append(lr[i]+dr)
+                
+                intlist.append((la[i]+(k1[i][0]+2*k2[i][0]+2*k3[i][0]+k4[i][0])/6)**2*(lr[i]+dr)**2)
+
+                if la[i]*la[i-1] < 0:
+                    nodenumber = nodenumber + 1
+
+                if (draw % 10 == 0) and (plot_while_calculating == True):
+                    plt.clf()
+
+                if nodenumber > order:
+                    phi_min = s
+                    s = (phi_min + phi_max)/2
+                    if verbose_output == True:
+                        print('1. ', s)
+                    if plot_while_calculating == True:
+                        plt.plot(la)
+                        plt.pause(0.05)
+                        plt.show()
+                    draw += 1
+                    break
+
+                elif la[i] > 1.0:
+                    currentflag = 1.1
+                    phi_max = s
+                    s = (phi_min + phi_max)/2
+                    if verbose_output == True:
+                        print('1.1 ', s)
+                    if plot_while_calculating == True:
+                        plt.plot(la)
+                        plt.pause(0.05)
+                    draw += 1
+                    break
+
+                elif la[i] < -1.0:
+                    currentflag = 1.2
+                    phi_max = s
+                    s = (phi_min + phi_max)/2
+                    if verbose_output == True:
+                        print('1.2 ', s)
+                    if plot_while_calculating == True:
+                        plt.plot(la)
+                        plt.pause(0.05)
+                    draw += 1
+                    break
+
+                if i == int(rge)-1:
+                    if nodenumber < order:
+                        currentflag = 2
+                        phi_max = s
+                        s = (phi_min + phi_max)/2
+                        if verbose_output == True:
+                            print('2. ', s)
+                        if plot_while_calculating == True:
+                            plt.plot(la)
+                            plt.pause(0.05)
+                        draw += 1
+                        break
+
+                    elif ((order%2 == 1) and (la[i] < -tolerance)) or ((order%2 == 0) and (la[i] > tolerance)):
+                        currentflag = 4
+                        phi_max = s
+                        s = (phi_min + phi_max)/2
+                        if verbose_output == True:
+                            print('4. ', s)
+                        if plot_while_calculating == True:
+                            plt.plot(la)
+                            plt.pause(0.05)
+                            plt.show()
+                        draw += 1
+                        break
+
+                    else:
+                        optimised = True
+
+
+
+        #Calculate the (dimensionless) mass of the soliton:
+
+        mass = si.simps(intlist,lr)*4*np.pi
+
+        # IMPORTANT 
+        Ratio = BHMass/mass
+
+                
+        if np.abs(Ratio - TargetRatio) <= Tol:
+            print(f"Done at #{IterInt}!")
+            
+            return s, BHmass
+            break
+            
+        if Ratio < TargetRatio:
+            print('>', end = "")
+            
+            BHMassLo = BHMass
+            BHMassHi = BHMassHi
+            
+            BHMass = (BHMassLo+BHMassHi)/2
+            
+        if Ratio > TargetRatio:
+            print('<', end = "")
+
+            BHMassLo = BHMassLo
+            BHMassHi = BHMass
+            
+            BHMass = (BHMassLo+BHMassHi)/2
+        
+        BHmass = BHMass
+        IterInt += 1
+        
+        if IterInt == Iter:
+            
+            raise ValueError("First loop of shooting algorithm failed to converge to given ratio.")
+            return 0,0
+        s = 0    
+
+        
+def SolitonProfile(BHMass,s,Smoo,Production):
+      
+    Save_Folder = './Soliton Profile Files/Custom/'
+    
+    #Note that the spatial resolution of the profile must match the specification of delta_x in the main code.
+    if Production:
+        dr = .00001
+        max_radius = 15
+        tolerance = 1e-9 # how close f(r) must be to 0 at r_max; can be changed
+        
+    else:
+        dr = .001
+        max_radius = 9 
+        tolerance = 1e-7 # how close f(r) must be to 0 at r_max; can be changed
+        
+    print(f"Central Potential Mass = {BHMass:.5f} @(a = {Smoo}) and Resolution {dr}")
+        
+    rge = max_radius/dr
+    
+    BHmass = BHMass
+
+    Lambda = 0 # axion self-interaction strength. Lambda < 0: attractive.
+    
+    nodes = [0] # Only consider ground state
+
+    plot_while_calculating = False # If true, a figure will be updated for every attempted solution
+
+    verbose_output = True # If true, s value of every attempt will be printed in console.
+
+    def g1(r, a, b, c, BHmass = BHmass):
+        return -(2/r)*c+2*b*a - 2*(Smoo*BHmass / (Smoo*r+np.exp(-Smoo*r)))*a + 2 * Lambda * a **3
+
+    def g2(r, a, d):
+        return 4*np.pi*a**2-(2/r)*d
+
+    for order in nodes:
+
+        optimised = False
+        tstart = time.time()
+
+        phi_min = -5 # lower phi-tilde value (i.e. more negative phi value)
+        phi_max = s
+        draw = 0
+        currentflag = 0
+
+        if plot_while_calculating == True:
+            plt.figure(1)
+
+        while optimised == False:
+            nodenumber = 0
+
+            ai = 1
+            bi = s
+            ci = 0
+            di = 0
+
+            la = []
+            lb = []
+            lc = []
+            ld = []
+            lr = []
+            intlist = []
+
+            la.append(ai)
+            lb.append(bi)
+            lc.append(ci)
+            ld.append(di)
+            lr.append(dr/1000)
+            intlist.append(0.)
+
+
+            # kn lists follow index a, b, c, d, i.e. k1[0] is k1a
+            k1 = []
+            k2 = []
+            k3 = []
+            k4 = []
+
+            for i in range(int(rge)):
+                list1 = []
+                list1.append(lc[i]*dr)
+                list1.append(ld[i]*dr)
+                list1.append(g1(lr[i],la[i],lb[i],lc[i])*dr)
+                list1.append(g2(lr[i],la[i],ld[i])*dr)
+                k1.append(list1)
+
+                list2 = []
+                list2.append((lc[i]+k1[i][2]/2)*dr)
+                list2.append((ld[i]+k1[i][3]/2)*dr)
+                list2.append(g1(lr[i]+dr/2,la[i]+k1[i][0]/2,lb[i]+k1[i][1]/2,lc[i]+k1[i][2]/2)*dr)
+                list2.append(g2(lr[i]+dr/2,la[i]+k1[i][0]/2,ld[i]+k1[i][3]/2)*dr)
+                k2.append(list2)
+
+                list3 = []
+                list3.append((lc[i]+k2[i][2]/2)*dr)
+                list3.append((ld[i]+k2[i][3]/2)*dr)
+                list3.append(g1(lr[i]+dr/2,la[i]+k2[i][0]/2,lb[i]+k2[i][1]/2,lc[i]+k2[i][2]/2)*dr)
+                list3.append(g2(lr[i]+dr/2,la[i]+k2[i][0]/2,ld[i]+k2[i][3]/2)*dr)
+                k3.append(list3)
+
+                list4 = []
+                list4.append((lc[i]+k3[i][2])*dr)
+                list4.append((ld[i]+k3[i][3])*dr)
+                list4.append(g1(lr[i]+dr,la[i]+k3[i][0],lb[i]+k3[i][1],lc[i]+k3[i][2])*dr)
+                list4.append(g2(lr[i]+dr,la[i]+k3[i][0],ld[i]+k3[i][3])*dr)
+                k4.append(list4)
+
+                la.append(la[i]+(k1[i][0]+2*k2[i][0]+2*k3[i][0]+k4[i][0])/6)
+                lb.append(lb[i]+(k1[i][1]+2*k2[i][1]+2*k3[i][1]+k4[i][1])/6)
+                lc.append(lc[i]+(k1[i][2]+2*k2[i][2]+2*k3[i][2]+k4[i][2])/6)
+                ld.append(ld[i]+(k1[i][3]+2*k2[i][3]+2*k3[i][3]+k4[i][3])/6)
+                lr.append(lr[i]+dr)
+                intlist.append((la[i]+(k1[i][0]+2*k2[i][0]+2*k3[i][0]+k4[i][0])/6)**2*(lr[i]+dr)**2)
+
+                if la[i]*la[i-1] < 0:
+                    nodenumber = nodenumber + 1
+
+                if (draw % 10 == 0) and (plot_while_calculating == True):
+                    plt.clf()
+
+                if nodenumber > order:
+                    phi_min = s
+                    s = (phi_min + phi_max)/2
+                    if verbose_output == True:
+                        print("◌", end ="")
+                    if plot_while_calculating == True:
+                        plt.plot(la)
+                        plt.pause(0.05)
+                        plt.show()
+                    draw += 1
+                    break
+
+                elif la[i] > 1.0:
+                    currentflag = 1.1
+                    phi_max = s
+                    s = (phi_min + phi_max)/2
+                    if verbose_output == True:
+                        print("⚬", end ="")
+                    if plot_while_calculating == True:
+                        plt.plot(la)
+                        plt.pause(0.05)
+                    draw += 1
+                    break
+
+                elif la[i] < -1.0:
+                    currentflag = 1.2
+                    phi_max = s
+                    s = (phi_min + phi_max)/2
+                    if verbose_output == True:
+                        print("⬤", end ="")
+                    if plot_while_calculating == True:
+                        plt.plot(la)
+                        plt.pause(0.05)
+                    draw += 1
+                    break
+
+                if i == int(rge)-1:
+                    if nodenumber < order:
+                        currentflag = 2
+                        phi_max = s
+                        s = (phi_min + phi_max)/2
+                        if verbose_output == True:
+                            print("◯", end ="")
+                        if plot_while_calculating == True:
+                            plt.plot(la)
+                            plt.pause(0.05)
+                        draw += 1
+                        break
+
+                    elif ((order%2 == 1) and (la[i] < -tolerance)) or ((order%2 == 0) and (la[i] > tolerance)):
+                        currentflag = 4
+                        phi_max = s
+                        s = (phi_min + phi_max)/2
+                        if verbose_output == True:
+                            print("☺", end ="")
+                        if plot_while_calculating == True:
+                            plt.plot(la)
+                            plt.pause(0.05)
+                            plt.show()
+                        draw += 1
+                        break
+
+                    else:
+                        optimised = True
+                        print('{}{}'.format('\n Successfully optimised for s = ', s))
+                        timetaken = time.time() - tstart
+                        print('{}{}'.format('\n Time taken = ', timetaken))
+                        grad = (lb[i] - lb[i - 1]) / dr
+                        const = lr[i] ** 2 * grad
+                        beta = lb[i] + const / lr[i]
+
+        #Calculate full width at half maximum density:
+
+        difflist = []
+        for i in range(int(rge)):
+            difflist.append(abs(la[i]**2 - 0.5))
+
+        fwhm = 2*lr[difflist.index(min(difflist))]
+
+        #Calculate the (dimensionless) mass of the soliton:
+
+        mass = si.simps(intlist,lr)*4*np.pi
+
+        #Calculate the radius containing 90% of the massin
+
+        partial = 0.
+        for i in range(int(rge)):
+            partial = partial + intlist[i]*4*np.pi*dr
+            if partial >= 0.9*mass:
+                r90 = lr[i]
+                break
+
+        partial = 0.
+        for i in range(int(rge)):
+            partial = partial + intlist[i]*4*np.pi*dr
+            if lr[i] >= 0.5*1.38:
+                print ('{}{}'.format('M_core = ', partial))
+                break
+
+        print ('{}{}'.format('Full width at half maximum density is ', fwhm))
+        print ('{}{}'.format('Beta is ', beta))
+        print ('{}{}'.format('Pre-Alpha (Mass) is ', mass))
+        print ('{}{}'.format('Radius at 90% mass is ', r90))
+        print ('{}{}'.format('MBH/MSoliton is ', BHmass/mass))
+
+        #Save the numpy array and plots of the potential and wavefunction profiles.
+        psi_array = np.array(la)
+        
+        Ratio = BHmass / mass 
+        
+        Save_Folder = './Soliton Profile Files/Custom/'
+        
+        if Production:
+            RATIOName = f"f_{Ratio:.4f}_Pro"
+        else:
+            RATIOName = f"f_{Ratio:.4f}_Dra"
+        
+        print(RATIOName)
+        
+        Profile_Config = {}
+        
+        Profile_Config["Version"] = ({"Short": Version, 
+                                      "Long": D_version})
+
+        Profile_Config["Actual Ratio"] = Ratio
+        Profile_Config["Resolution"] = dr
+        Profile_Config["Alpha"] = mass
+        Profile_Config["Beta"] = beta
+        Profile_Config["Field Smoothing Factor"] = Smoo
+        
+
+        
+        
+        np.save(Save_Folder + RATIOName + '.npy', psi_array)
+        
+        with open(Save_Folder + RATIOName + '_info.txt', "w+") as outfile:
+            json.dump(Profile_Config, outfile,indent=4)
+
+    print ('Successfully Initiated Soliton Profile.')
+    
+def LoadSolitonConfig(Ratio): 
+    
+    Ratio = float(Ratio)
+    
+    RatioN = f"{Ratio:.4f}"
+    
+    FileName = './Soliton Profile Files/Custom/f_'+RatioN+'_Pro_info.txt'
+    
+    if os.path.isfile(FileName):
+        with open(configfile) as json_file:
+            config = json.load(json_file)
+            
+    else:
+        FileName = './Soliton Profile Files/Custom/f_'+RatioN+'_Dra_info.txt'
+
+    try:
+        config = json.load(open(FileName))
+        
+        delta_x = config["Resolution"]
+        alpha   = config["Alpha"]
+        beta   = config["Beta"]
+        
+        return delta_x, alpha, beta
+    
+    except FileNotFoundError:
+        raise RuntimeError("This Ratio has not been generated!")
+        
+        
+def LoadSoliton(Ratio):  
+    Ratio = float(Ratio)
+    RatioN = f"{Ratio:.4f}"
+    
+    FileName = './Soliton Profile Files/Custom/f_'+RatioN+'_Pro.npy'
+    
+    if os.path.isfile(FileName):
+        return np.load(FileName)
+            
+    else:
+        FileName = './Soliton Profile Files/Custom/f_'+RatioN+'_Dra.npy'
+        return np.load(FileName)
     
 ######################### With Built-in I/O Management
-def evolve(save_path,run_folder,Method):
+def evolve(save_path,run_folder,Method,Draft):
+    
+    clear_output()
+    print(f"=========={Version}: {D_version}==========")
     
     timestamp = run_folder
     
@@ -1017,33 +1565,34 @@ def evolve(save_path,run_folder,Method):
             
     num_threads = multiprocessing.cpu_count()
     
-    NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_path, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, Uniform,Density, density_unit,a, NCV,NCW = LoadConfig(configfile)
+    NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_path, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles,embeds, Uniform,Density, density_unit,a, NCV,NCW = LoadConfig(configfile)
 
-    print(f"{Version} IO: Loaded Configuration In {configfile}")
+    # Embedded particles are Pre-compiled into the list.
+    
+    print(f"{Version} IO   : Loaded Parameters from {configfile}")
 
     NumSol = len(solitons)
     NumTM = len(particles)
 
     if Method == 2:
-        print(f"{Version} Runtime: Using DCT Sum Interpolation Between Grids")
+        print(f"{Version} NBody: Using DCT Sum interpolation For gravity.")
             
     if Method == 1: # 1 = Real Space Interpolation (Orange), 2 = Fourier Sum (White)
-        print(f"{Version} Runtime: Using Linear Interpolation For Gravity.")
+        print(f"{Version} NBody: Using Linear Interpolation for gravity.")
     
-    print(f"{Version} Init: Simulating {NumSol} ULDM solitons and {NumTM} partcles.")
+    print(f"{Version} NBody: The point mass field smoothing factor is {a:.5f}.")
     
-    print (f"{Version} Init: The point mass smoothing factor is {a:.5f}.")
+    print(f"{Version} SP: Simulation grid resolution is {resol}^3.")
     
     HWHM = (LW(-np.exp(-2))+2)/a # inversely proportional to a.
     
     HWHM = np.real(HWHM)
     
-    
     if HWHM > length / 4:
-        print("WARNING: Field Smoothing might be too big, and the perfomance will be compromised.")
+        print("WARNING: Field Smoothing factor too small, and the perfomance will be compromised.")
     
-    if HWHM <= length / (2*resol):
-        print("WARNING: The field peak is narrower than one grid. The model requires a better resolution to reliably simulate.")
+    if HWHM <= length / (4*resol):
+        print("WARNING: The field peak is narrower than half a grid. There may be artifitial energy fluctuations.")
     
     if np.sum(NCW) != 0:
         NCW = NCW/np.sum(NCW) # Normalized to 1
@@ -1059,7 +1608,6 @@ def evolve(save_path,run_folder,Method):
     ##########################################################################################
     #SET INITIAL CONDITIONS
 
-
     gridlength = convert(length, length_units, 'l')
 
     t = convert(duration, duration_units, 't')
@@ -1073,25 +1621,25 @@ def evolve(save_path,run_folder,Method):
     Vcell = (gridlength / float(resol)) ** 3
     
     ne.set_num_threads(num_threads)
-    
-
-    
+        
     ##########################################################################################
-    # CREATE THE Just-In-Time Functions
+    # CREATE THE Just-In-Time Functions (work in progress)
+    
+    print(f'{Version} Runtime: JIT optimisations under development. Please ignore Numba warnings for now.')
 
     FloaterAdvanceI_jit = numba.jit(FloaterAdvanceI)
+    
     initsoliton_jit = numba.jit(initsoliton)
-
+    
+    FWNBodyI_jit = numba.jit(FWNBodyI)
+    
+    IP_jit = numba.jit(isolatedPotential)
+    
     ##########################################################################################
     # CREATE THE TIMESTAMPED SAVE DIRECTORY AND CONFIG.TXT FILE
 
     save_path = os.path.expanduser(save_path)
-    
-    tBegin = time.time()
-    
-    tBeginDisp = datetime.fromtimestamp(tBegin).strftime("%d/%m/%Y, %H:%M:%S")
-    
-    print(f"{Version} IO: Simulation Started at {tBeginDisp}.")
+       
     ##########################################################################################
     # SET UP THE REAL SPACE COORDINATES OF THE GRID - FW Revisit
 
@@ -1130,32 +1678,6 @@ def evolve(save_path,run_folder,Method):
     
     # INITIALISE SOLITONS WITH SPECIFIED MASS, POSITION, VELOCITY, PHASE
 
-
-    f = LoadSoliton('./Soliton Profile Files/initial_f.npy')
-    
-    for k in range(NumSol):
-        if (k != 0):
-            if (not overlap_check(solitons[k], solitons[:k])):
-                warn = 1
-            else:
-                warn = 0
-
-    for s in solitons:
-        mass = convert(s[0], s_mass_unit, 'm')
-        position = convert(np.array(s[1]), s_position_unit, 'l')
-        velocity = convert(np.array(s[2]), s_velocity_unit, 'v')
-        # Note that alpha and beta parameters are computed when the initial_f.npy soliton profile file is generated.
-        alpha = (mass / 3.883) ** 2
-        beta = 2.454
-        phase = s[3]
-        funct = initsoliton_jit(funct, xarray, yarray, zarray, position, alpha, f, delta_x)
-        ####### Impart velocity to solitons in Galilean invariant way
-        velx = velocity[0]
-        vely = velocity[1]
-        velz = velocity[2]
-        funct = ne.evaluate("exp(1j*(alpha*beta*t0 + velx*xarray + vely*yarray + velz*zarray -0.5*(velx*velx+vely*vely+velz*velz)*t0  + phase))*funct")
-        psi = ne.evaluate("psi + funct")
-            
     if Uniform:
         
         DensityCom = Density * (gridlength**3) / resol**3
@@ -1164,6 +1686,80 @@ def evolve(save_path,run_folder,Method):
         print(f"{Version} Init: Initial density is {DensityCom:.5f} per mesh grid.")
         print('==============================================================================')
         psi = ne.evaluate("0*psi + sqrt(DensityCom)")
+        
+        
+    else:
+        # Load Embedded Objects first
+        
+        EI = 0
+        for emb in embeds:
+
+            # 0.     1.     2.          3.                   4.
+            # [mass,[x,y,z],[vx,vy,vz], BH-Total Mass Ratio, Phase]
+            Ratio = emb[3]
+            RatioBU = float(Ratio/(1-Ratio))
+            try:
+                delta_xL, prealphaL, betaL = LoadSolitonConfig(RatioBU)
+            except RuntimeError:
+                print('==============================================================================')
+                print(f'{Version} IO: Note that this process will not be required for repeated runs. To remove custom profiles, go to the folder /Soliton Profile Files/Custom.')
+                print(f'Generating profile for Soliton with MBH/MSoliton = {RatioBU:.4f}, Part 1')
+                GMin,GMax = BHGuess(RatioBU)
+                s, BHMass = BHRatioTester(RatioBU,30,1e-6,GMin,GMax,a)
+                print(f'Generating profile for Soliton with MBH/MSoliton = {RatioBU:.4f}, Part 2')
+                SolitonProfile(BHMass,s,a,False)
+                print('==============================================================================')
+                delta_xL, prealphaL, betaL = LoadSolitonConfig(RatioBU)
+
+            # L stands for Local, as in it's only used once.
+            fL = LoadSoliton(RatioBU)
+
+            print(f"{Version} Init: Loaded embedded soliton {EI} with BH-Soliton mass ratio {RatioBU:.4f}.")
+
+            mass = convert(emb[0], s_mass_unit, 'm')*(1-Ratio)
+
+            position = convert(np.array(emb[1]), s_position_unit, 'l')
+            velocity = convert(np.array(emb[2]), s_velocity_unit, 'v')
+
+            # Note that alpha and beta parameters are computed when the initial_f.npy soliton profile file is generated.
+
+            alphaL = (mass / prealphaL) ** 2
+
+            phase = emb[4]
+
+            funct = initsoliton_jit(funct, xarray, yarray, zarray, position, alphaL, fL, delta_xL)
+            ####### Impart velocity to solitons in Galilean invariant way
+            velx = velocity[0]
+            vely = velocity[1]
+            velz = velocity[2]
+            funct = ne.evaluate("exp(1j*(alphaL*betaL*t0 + velx*xarray + vely*yarray + velz*zarray -0.5*(velx*velx+vely*vely+velz*velz)*t0  + phase))*funct")
+            psi = ne.evaluate("psi + funct")
+
+            EI += 1
+
+
+        if solitons != []:
+            
+            print(f"{Version} Init: Loaded unperturbed soliton.")
+            f = LoadDefaultSoliton('./Soliton Profile Files/initial_f.npy')
+
+        for s in solitons:
+            mass = convert(s[0], s_mass_unit, 'm')
+            position = convert(np.array(s[1]), s_position_unit, 'l')
+            velocity = convert(np.array(s[2]), s_velocity_unit, 'v')
+            # Note that alpha and beta parameters are computed when the initial_f.npy soliton profile file is generated.
+            alpha = (mass / 3.883) ** 2
+            beta = 2.454
+            phase = s[3]
+            funct = initsoliton_jit(funct, xarray, yarray, zarray, position, alpha, f, delta_x)
+            ####### Impart velocity to solitons in Galilean invariant way
+            velx = velocity[0]
+            vely = velocity[1]
+            velz = velocity[2]
+            funct = ne.evaluate("exp(1j*(alpha*beta*t0 + velx*xarray + vely*yarray + velz*zarray -0.5*(velx*velx+vely*vely+velz*velz)*t0  + phase))*funct")
+            psi = ne.evaluate("psi + funct")
+       
+
         
     rho = ne.evaluate("real(abs(psi)**2)")
 
@@ -1234,13 +1830,13 @@ def evolve(save_path,run_folder,Method):
     # COMPUTE INTIAL VALUE OF POTENTIAL
 
     if Uniform:
-        print(f"{Version} Init: Poisson Equation Solveed Using FFT.")
+        print(f"{Version} SP: Poisson Equation Solveed Using FFT.")
         phisp = irfft_phi(phik)
     else:
-        print(f"{Version} Init: Initiating Green functions for simulation region.")   
+        print(f"{Version} SP: Initiating Green functions for simulation region.")   
         green = makeDCTGreen(resol) #make Green's function ONCE
         #green = makeEvenArray(green)
-        phisp = isolatedPotential(rho, green, gridlength, fft_X, ifft_X, fft_plane, ifft_plane)
+        phisp = IP_jit(rho, green, gridlength, fft_X, ifft_X, fft_plane, ifft_plane)
         
     ##########################################################################################
     # FW NBody
@@ -1251,9 +1847,9 @@ def evolve(save_path,run_folder,Method):
         TMmass = convert(particle[0], m_mass_unit, 'm')
         
         if TMmass == 0:
-            print(f"{Version} Init: Particle #{MI} loaded as observer.")
+            print(f"{Version} NBody: Particle #{MI} loaded as observer.")
         else:
-            print(f"{Version} Init: Particle #{MI} loaded, with (code) mass {TMmass:.3f}")
+            print(f"{Version} NBody: Particle #{MI} loaded, with (code) mass {TMmass:.3f}")
         
         masslist.append(TMmass)
 
@@ -1286,10 +1882,18 @@ def evolve(save_path,run_folder,Method):
     
     TMStateDisp = TMState.reshape((-1,6))
     
-    print(f"{Version} Init: The initial NBody state vector is:")
+    print(f"{Version} NBody: The initial state vector is:")
     print(TMStateDisp)
         
     MI = 0
+    
+    tBegin = time.time()
+    
+    tBeginDisp = datetime.fromtimestamp(tBegin).strftime("%d/%m/%Y, %H:%M:%S")
+    
+    print("======================================================")
+    
+    print(f"{Version} Runtime: Simulation Started at {tBeginDisp}.")
     ##########################################################################################
     # PRE-LOOP ENERGY CALCULATION
 
@@ -1356,7 +1960,7 @@ def evolve(save_path,run_folder,Method):
         if Uniform:
             phisp = irfft_phi(phik)
         else:
-            phisp = isolatedPotential(rho, green, gridlength, fft_X, ifft_X, fft_plane, ifft_plane)
+            phisp = IP_jit(rho, green, gridlength, fft_X, ifft_X, fft_plane, ifft_plane)
         
             
         # FW TEST STEP MAGIC HAPPENS HERE
