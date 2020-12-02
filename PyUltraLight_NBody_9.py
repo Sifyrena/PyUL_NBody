@@ -8,11 +8,6 @@ import sys
 import numpy as np
 import numexpr as ne
 import numba
-from numba.core.errors import NumbaDeprecationWarning, NumbaPendingDeprecationWarning, NumbaWarning
-import warnings
-
-warnings.simplefilter('ignore', category=NumbaDeprecationWarning)
-warnings.simplefilter('ignore', category=NumbaWarning)
 
 import pyfftw
 import h5py
@@ -963,8 +958,10 @@ def FloaterAdvanceI(TMState,h,masslist,NS,GxI,GyI,GzI,a,HWHM,NCV,NCW):
         # We pass on phik into the Gradient Function Above. This saves one inverse FFT call.
         # The N-Body Simulation is written from scratch
 
-        # 
+        #
         if NS == 0:
+            NS = 1
+        if NS == 1:
  
             Step, GradientLog = FWNBodyI_jit(0,TMState,masslist,GxI,GyI,GzI,a,HWHM,NCV,NCW)
             
