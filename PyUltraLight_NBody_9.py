@@ -8,7 +8,7 @@ import sys
 import numpy as np
 import numexpr as ne
 import numba
-from numba.core.errors import NumbaDeprecationWarning, NumbaPendingDeprecationWarning
+from numba.core.errors import NumbaDeprecationWarning, NumbaPendingDeprecationWarning, NumbaWarning
 import warnings
 
 warnings.simplefilter('ignore', category=NumbaDeprecationWarning)
