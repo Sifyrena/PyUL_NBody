@@ -1,6 +1,6 @@
 Version   = str('ULHelper') # Handle used in console.
 D_version = str('Helper Build 2020 12 01') # Detailed Version
-S_version = 7 # Short Version
+S_version = 6 # Short Version
 
 print(D_version)
 
@@ -63,7 +63,7 @@ def SSEst(save_options, save_number, resol):
     if save_testmass:
         print('ULHelper: Saving NBody Position Data')
     
-    return (save_number+1)*(PreMult)*8/(1024**3) + (2*resol**3)*8/(1024**3)
+    return (save_number+1)*(PreMult)*8/(1024**3)
     
     
 
@@ -171,19 +171,19 @@ def Load_Data(save_path,ts,save_options,save_number):
     
         try:
             if save_plane:
-                data.append(np.load('{}{}{}{}'.format(loc, '/Outputs/plane_#', x, '.npy')))
+                data.append(np.load('{}{}{}{}'.format(loc, '/plane_#', x, '.npy')))
             if save_testmass:
 
-                TMdata.append(np.load('{}{}{}{}'.format(loc, '/Outputs/TM_#', x, '.npy')))
+                TMdata.append(np.load('{}{}{}{}'.format(loc, '/TM_#', x, '.npy')))
             if save_phi_plane:
 
-                phidata.append(np.load('{}{}{}{}'.format(loc, '/Outputs/Field2D_#', x, '.npy')))
+                phidata.append(np.load('{}{}{}{}'.format(loc, '/Field2D_#', x, '.npy')))
                 
             if save_gradients:
-                graddata.append(np.load('{}{}{}{}'.format(loc, '/Outputs/Gradients_#', x, '.npy')))
+                graddata.append(np.load('{}{}{}{}'.format(loc, '/Gradients_#', x, '.npy')))
                 
             if save_phase_plane:
-                phasedata.append(np.load('{}{}{}{}'.format(loc, '/Outputs/Arg2D_#', x, '.npy')))
+                phasedata.append(np.load('{}{}{}{}'.format(loc, '/Arg2D_#', x, '.npy')))
             
             EndNum += 1
         
@@ -623,7 +623,7 @@ def GenerateConfig(NS, central_mass, length, length_units, resol, duration, dura
 def Runs(save_path):
     runs = os.listdir(save_path)
     runs.sort()
-    Latest = Load_Latest(save_path)
+    
     FLog = 0
     Log = [FLog]
     for i in range(len(runs)):
@@ -632,22 +632,18 @@ def Runs(save_path):
             
             FLog += 1
             Log.append(i)
-            if runs[i] == Latest:
-                print("[",FLog,"]: *", runs[i],sep = '' )
-            else:
-                print("[",FLog,"]: ", runs[i],sep = ''  )
+            print("[",FLog,"]: ", runs[i] )
             
         
     print("Which folder do you want to analyse? Blank to load the latest one.")
     
     Ind = int(input() or -1)
-
+    
     if Ind == -1:
-        print(f"ULHelper: Loading {Latest}")
-        return Latest
+        return Load_Latest(save_path)
     else:
         Ind = Log[Ind]
-        print(f"ULHelper: Loading {runs[Ind]}")
+        print(f"ULHelper: You chose to load {runs[Ind]}")
         return runs[Ind]
 
 def LoadConfig(loc):
@@ -791,3 +787,211 @@ def NBodyEnergy(particles,EndNum,TMdata,m_mass_unit,a):
             
             
     return NBo, KS, PS
+
+
+def AnimSummary(TimeStamp,save_path, VX,VY,FPS,Loga,Skip,ToFile):
+    import matplotlib.animation
+
+    BarWidth = 1  # the width of the bars
+
+    MovieX = VX
+
+    MovieY = VY
+
+    loc = save_path + '/' + TimeStamp
+    
+    NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_path, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, Uniform,Density, density_unit,a, NCV,NCW = LoadConfig(loc)
+    
+    EndNum, data, TMdata, phidata, graddata, argdata = Load_Data(save_path,TimeStamp, save_options,save_number)
+
+    NBo, KS, PS = NBodyEnergy(particles,EndNum,TMdata,m_mass_unit,a)
+    
+    egylist = np.load('{}{}'.format(loc, '/egylist.npy'))
+  
+    egylistD = egylist - egylist[1]
+    
+    PSD = PS - PS[1]
+    
+    KSD = KS - KS[1]
+    
+    TotalED = PSD+KSD+egylistD
+
+    try:
+        VTimeStamp = TimeStamp
+    except NameError:
+        VTimeStamp = str('Debug')
+    
+    AnimName = '{}{}{}{}{}'.format("./",save_path,"/AnimSummary_",VTimeStamp,'.mp4')
+    
+    if ToFile:
+        print("Saving ",AnimName)
+    
+    
+    # Defining Grid System and Plotting Variables
+    
+    NumSol = len(solitons)
+    
+    figAS = plt.figure(figsize=(MovieX, MovieY))
+    gs = figAS.add_gridspec(4, 4)
+    
+    AS_GradGraph = figAS.add_subplot(gs[0, :])
+    AS_GradGraph.set_title('Acceleration of Particle #1')
+    
+    AS_FieldPlane = figAS.add_subplot(gs[1:3,0:2])
+    AS_FieldPlane.set_title('2D Gravitational Field')
+    
+    AS_RhoPlane = figAS.add_subplot(gs[1:3, 2:4])
+    AS_RhoPlane.set_title('2D Mass Density')
+    
+    
+    AS_EDelta = figAS.add_subplot(gs[3, :])
+    AS_EDelta.set_title('Energy Change Snapshot #1')
+    
+    
+    AS_FieldPlane.set_aspect('equal')
+    
+    if Loga:
+        
+        if Uniform:
+            data0 = np.log(np.array(data)/Density)
+            print("Initial Field is Uniform. Evaluating Change Ratio.")
+        
+        else:
+            data0 = np.log(data)
+            
+        planemax = np.max(data0)
+        planemin = -50
+        
+        print("Using Log Plot, the Contour Level Limits Are")
+        print(planemax,planemin)
+        
+    else:
+        data0 = (data)
+        planemax = np.max(data0)
+        planemin = np.min(data0)
+        
+            
+    levels = np.linspace(planemin, planemax, int(resol/2))
+    
+    PlotRange = np.linspace(-length/2, length/2,resol,endpoint = False)
+    
+    BarLabels = ['Total Energy', 'NBody Total Energy', 'ULDM Total Energy']
+    
+    BarX = np.arange(len(BarLabels))  # the label locations
+    
+    BarMax = np.max(np.abs(TotalED))
+        
+    graddataP = (graddata)
+    
+    
+    DTEMaxChange = 0.
+    DTEMinChange = 0.
+    
+    phimax = np.max(phidata)
+    phimin = np.min(phidata)
+    
+    def animateAS(i,DTEMaxChange,DTEMinChange):
+        
+        if Skip != 1 and i == 0:
+            print("We are skipping some frames.")
+        i = int(Skip*i-1)
+    
+        # Acceleration Graph
+    
+        AS_GradGraph.plot(i,graddataP[i][0],'r.',label = '$x$')
+        AS_GradGraph.plot(i,graddataP[i][1],'g.',label = '$y$')
+        AS_GradGraph.plot(i,graddataP[i][2],'b.',label = '$z$')
+       
+        # Field Graph
+        
+        sliced = phidata[i]
+    
+        AS_FieldPlane.imshow(sliced,origin='lower',vmin = phimin, vmax = phimax)
+    
+        AS_FieldPlane.set_xticks([])
+        AS_FieldPlane.set_yticks([])
+        
+        # Density Graph
+        
+        AS_RhoPlane.cla()
+        AS_RhoPlane.set_aspect('equal')
+        
+        AS_RhoPlane.set_xticks([])
+        AS_RhoPlane.set_yticks([])
+        
+        AS_RhoPlane.set_xlim([-length/2,length/2])
+        AS_RhoPlane.set_ylim([-length/2,length/2])
+        AS_RhoPlane.get_xaxis().set_ticks([])
+        AS_RhoPlane.get_yaxis().set_ticks([])
+        
+        AS_RhoPlane.contour(PlotRange,PlotRange,data0[i], levels=levels, vmin=planemin, vmax=planemax,cmap = 'coolwarm')
+    
+    
+        TMStateLoc = TMdata[i]
+        for particleID in range(len(particles)):
+            Vx = TMStateLoc[int(6*particleID+3)]
+            Vy = TMStateLoc[int(6*particleID+4)]
+            Vz = TMStateLoc[int(6*particleID+5)]
+            
+    
+            TMx = TMStateLoc[int(6*particleID)]
+            TMy = TMStateLoc[int(6*particleID+1)]
+            TMz = TMStateLoc[int(6*particleID+2)]
+            
+    
+            AS_RhoPlane.plot([TMy],[TMx],'ko')
+            AS_RhoPlane.quiver([TMy],[TMx],[Vy],[Vx])
+            
+            
+        # Bar Graph
+    
+        AS_EDelta.cla()
+        
+        DTE = TotalED[i]
+        DKE = KSD[i]+PSD[i]
+        DUE = egylistD[i]
+        
+        DTEMaxChange = np.max([DTEMaxChange,DTE])
+        DTEMinChange = np.min([DTEMinChange,DTE])
+        
+        EnergyEntry = [DTE, DKE, DUE]
+        
+        rects1 = AS_EDelta.bar(BarX, EnergyEntry, BarWidth)
+    
+        zeroLine = AS_EDelta.plot((-0.5,2.5),(0,0),'k--')
+        
+        maxLine = AS_EDelta.plot((-0.5,2.5),(DTEMaxChange,DTEMaxChange),'r-.')
+        
+        minLine = AS_EDelta.plot((-0.5,2.5),(DTEMinChange,DTEMinChange),'b-.')
+    
+        # Add some text for labels, title and custom x-axis tick labels, etc.
+        AS_EDelta.set_ylabel('Absolute Change Since Onset ($\mathcal{E}$)')
+        AS_EDelta.set_ylim(-2*BarMax,2*BarMax)
+        AS_EDelta.set_title('Energy Change for Snapshot %.0f'%i)
+        AS_EDelta.set_xticks(BarX)
+        AS_EDelta.set_xticklabels(BarLabels)
+    
+
+        
+        if i%FPS == 0 and i!= 0:
+            print('Animated %.0f seconds out of %.2f seconds of data.' % (i/FPS, EndNum/FPS))
+        
+        if i == EndNum-1:
+            clear_output()
+            print('Animation Complete:', AnimName)
+    
+            
+    interval = 0.00001 #in seconds
+    aniAS = matplotlib.animation.FuncAnimation(figAS,animateAS,int(EndNum/Skip),fargs=(DTEMaxChange,DTEMinChange),interval=interval*1e+3,blit=False)
+    
+    Writer = matplotlib.animation.writers['ffmpeg']
+    
+    writer = Writer(fps=FPS, metadata=dict(artist='PyUltraLightF'))
+    
+    if ToFile:
+        aniAS.save(AnimName, writer=writer)
+    else:
+        from IPython.display import HTML
+        animated_plot0 = HTML(aniAS.to_jshtml())
+        figAS.clear()
+        display(animated_plot0) 
