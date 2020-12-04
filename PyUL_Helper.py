@@ -10,8 +10,6 @@ import numpy as np
 import time
 import json
 
-
-
 def SSEst(save_options, save_number, resol):
     
     save_rho = save_options[0]
@@ -638,17 +636,25 @@ def Runs(save_path):
                 print("[",FLog,"]: ", runs[i],sep = ''  )
             
         
-    print("Which folder do you want to analyse? Blank to load the latest one.")
     
-    Ind = int(input() or -1)
-
-    if Ind == -1:
-        print(f"ULHelper: Loading {Latest}")
+    
+    if FLog == 0:
+        return 'EMPTY'
+    
+    if FLog == 1:
         return Latest
+    
     else:
-        Ind = Log[Ind]
-        print(f"ULHelper: Loading {runs[Ind]}")
-        return runs[Ind]
+        print("Which folder do you want to analyse? Blank to load the latest one.")
+        Ind = int(input() or -1)
+
+        if Ind == -1:
+            print(f"ULHelper: Loading {Latest}")
+            return Latest
+        else:
+            Ind = Log[Ind]
+            print(f"ULHelper: Loading {runs[Ind]}")
+            return runs[Ind]
 
 def LoadConfig(loc):
         

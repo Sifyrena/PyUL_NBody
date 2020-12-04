@@ -1823,8 +1823,18 @@ def evolve(save_path,run_folder,Method,Draft):
         print(f"{Version} SP: Poisson Equation Solveed Using FFT.")
         phisp = irfft_phi(phik)
     else:
-        print(f"{Version} SP: Initiating Green functions for simulation region.")   
-        green = makeDCTGreen(resol) #make Green's function ONCE
+        
+        
+        try:
+            green = np.load(f'./Green Functions/G{resol}.npy')
+            print(f"{Version} SP: Using pre-computed Green function for simulation region.")
+        except FileNotFoundError:
+            if not os.path.exists('./Green Functions/'):
+                os.mkdir('./Green Functions/')
+            green = makeDCTGreen(resol) #make Green's function ONCE
+            print(f"{Version} SP: Generating Green function for simulation region.")
+            np.save(f'./Green Functions/G{resol}.npy',green)
+            
         #green = makeEvenArray(green)
         phisp = IP_jit(rho, green, gridlength, fft_X, ifft_X, fft_plane, ifft_plane)
         
@@ -1902,13 +1912,10 @@ def evolve(save_path,run_folder,Method,Draft):
     )
     
     
-    print(f'{Version} IO: Successfully initiated Wavefunction, (Green Function), and NBody Initial Conditions. Dumping to file.')
+    print(f'{Version} IO: Successfully initiated Wavefunction, and NBody Initial Conditions. Dumping to file.')
     
     np.save(f'{loc}/Initial_psi.npy',psi)
     np.save(f'{loc}/Initial_NBody.npy',psi)
-    
-    if not Uniform:
-        np.save(f'{loc}/Initial_green.npy',green) 
 
     tBegin = time.time()
     
