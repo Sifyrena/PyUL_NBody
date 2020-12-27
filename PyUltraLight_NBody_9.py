@@ -1,6 +1,6 @@
-Version   = str('PyUL9') # Handle used in console.
-D_version = str('Integrator Build 2020 12 02') # Detailed Version
-S_version = 9 # Short Version
+Version   = str('PyULN') # Handle used in console.
+D_version = str('Integrator Build 2020 12 24') # Detailed Version
+S_version = 10 # Short Version
 
 import time
 from datetime import datetime
@@ -12,12 +12,11 @@ import numba
 import pyfftw
 import h5py
 import os
-import scipy.fftpack
+import scipy.fft
 import multiprocessing
 import json
 
 import scipy.integrate as si
-
 
 from scipy.interpolate import RegularGridInterpolator as RPI
 
@@ -172,7 +171,9 @@ def makeDCTGreen(n):
     arr = safeInverse3D(arr)
     arr[0,0,0] = 3*np.log(np.sqrt(3) + 2) - np.pi/2 #calculated in https://arxiv.org/pdf/chem-ph/9508002.pdf
     # no normalization below matches un-normalization in Mathematica
-    green =  scipy.fftpack.dctn(arr, type = 1, norm = None)
+    
+    with scipy.fft.set_workers(num_threads):
+        green =  scipy.fft.dctn(arr, type = 1, norm = None)
     return(green)
     
 #makeEvenArray
@@ -670,7 +671,9 @@ def calculate_energiesF(save_options, resol,
                 
             
             egyarr = ne.evaluate('real(mPhi*egyarr)')
+            
             egpcmlist.append(Vcell * np.sum(egyarr))
+            
             tot = Vcell * np.sum(egyarr)
 
             # Gravitational potential energy density of self-interaction of the condensate
@@ -1553,7 +1556,7 @@ PC_jit = numba.jit(planeConvolve)
     
     
 ######################### New Version With Built-in I/O Management
-def evolve(save_path,run_folder,Method,Draft):
+def evolve(save_path,run_folder,Method = 1,Draft = True):
     
     clear_output()
     print(f"=========={Version}: {D_version}==========")
@@ -1670,12 +1673,16 @@ def evolve(save_path,run_folder,Method,Draft):
 
     if Uniform:
         
-        DensityCom = Density * (gridlength**3) / resol**3
+        MassCom = Density*gridlength**3
+        
+        
+        DensityCom = MassCom / resol**3
+        
         print('==============================================================================')
         print(f"{Version} Init: Solitons overridden with a uniform wavefunction with no phase.")
-        print(f"{Version} Init: Initial density is {DensityCom:.5f} per mesh grid.")
+        print(f"{Version} Init: Total ULDM mass in domain is {MassCom:.4f}. This is {Density:.4f} per grid.")
         print('==============================================================================')
-        psi = ne.evaluate("0*psi + sqrt(DensityCom)")
+        psi = ne.evaluate("0*psi + sqrt(Density)")
         
         
     else:
@@ -1887,6 +1894,8 @@ def evolve(save_path,run_folder,Method,Draft):
         
     MI = 0
     
+    GridMass = [Vcell*np.sum(rho)] # Mass of ULDM in Grid
+    
     if (save_options[3]):
         egylist = []
         egpcmlist = []
@@ -1914,8 +1923,16 @@ def evolve(save_path,run_folder,Method,Draft):
     
     print(f'{Version} IO: Successfully initiated Wavefunction, and NBody Initial Conditions. Dumping to file.')
     
-    np.save(f'{loc}/Initial_psi.npy',psi)
-    np.save(f'{loc}/Initial_NBody.npy',psi)
+    file_name = f'{loc}/Initial_psi.hdf5'
+    f = h5py.File(file_name, 'w')
+    dset = f.create_dataset("init", data=psi)
+    f.close()
+    
+    file_name = f'{loc}/Initial_NBody.hdf5'
+    f = h5py.File(file_name, 'w')
+    dset = f.create_dataset("init", data=TMState)
+    f.close()
+
 
     tBegin = time.time()
     
@@ -2045,7 +2062,8 @@ def evolve(save_path,run_folder,Method,Draft):
                     loc, ix, its_per_save, GradientLog,
             )
             
-            
+            GridMass.append(Vcell*np.sum(rho))
+            np.save(os.path.join(os.path.expanduser(loc), "Outputs/ULDMass.npy"), GridMass)
             
             if (save_options[3]):  
                 np.save(os.path.join(os.path.expanduser(loc), "Outputs/egylist.npy"), egylist)
