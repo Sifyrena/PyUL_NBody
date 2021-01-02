@@ -32,21 +32,40 @@ except ModuleNotFoundError:
 
 pi = np.pi
 
-hbar = 1.0545718e-34  # m^2 kg/s
-parsec = 3.0857e16  # m
-light_year = 9.4607e15  # m
-solar_mass = 1.989e30  # kg
-axion_mass = 1e-22 * 1.783e-36  # kg
-G = 6.67e-11  # N m^2 kg^-2
-omega_m0 = 0.31
-H_0 = 67.7 * 1e3 / (parsec * 1e6)  # s^-1
+eV = 1.783e-36 # kg*c^2
 
+# ULDM:
+axion_E = 1e-22
+
+# CDM Clumps:
+# axion_E = 2e-5
+
+axion_mass = axion_E * eV
+
+hbar = 1.0545718e-34  # m^2 kg/s
+
+parsec = 3.0857e16  # m
+
+light_year = 9.4607e15  # m
+
+solar_mass = 1.989e30  # kg
+
+G = 6.67e-11  # kg
+
+
+omega_m0 = 0.31
+
+H_0 = 67.7 / (parsec * 1e3)  # s^-1
+
+
+CritDens = 3*H_0**2/(8*pi*G)
 # IMPORTANT
 
-length_unit = (8 * np.pi * hbar ** 2 / (3 * axion_mass ** 2 * H_0 ** 2 * omega_m0)) ** 0.25
-time_unit = (3 * H_0 ** 2 * omega_m0 / (8 * np.pi)) ** -0.5
-mass_unit = (3 * H_0 ** 2 * omega_m0 / (8 * np.pi)) ** 0.25 * hbar ** 1.5 / (axion_mass ** 1.5 * G)
+time_unit = (3 * H_0 ** 2 * omega_m0 / (8 * pi)) ** -0.5
 
+length_unit = (8 * pi * hbar ** 2 / (3 * axion_mass ** 2 * H_0 ** 2 * omega_m0)) ** 0.25
+
+mass_unit = (3 * H_0 ** 2 * omega_m0 / (8 * pi)) ** 0.25 * hbar ** 1.5 / (axion_mass ** 1.5 * G)
 
 def LoadConfig(loc):
         
