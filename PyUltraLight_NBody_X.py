@@ -1,6 +1,6 @@
 Version   = str('PyULN') # Handle used in console.
-D_version = str('Integrator Build 2021 02 02') # Detailed Version
-S_version = 11
+D_version = str('Integrator Build 2021 02 20') # Detailed Version
+S_version = 12
  # Short Version
 
 import time
@@ -27,7 +27,6 @@ from IPython.core.display import clear_output
 try:
     import scipy.special.lambertw as LW
 except ModuleNotFoundError:
-    print('WARNING: scipy.special not installed. Using Pre-Computed value for W(-e^-2)')
     def LW(a):
         return -0.15859433956303937
 
@@ -288,7 +287,7 @@ def convert(value, unit, type):
         elif (unit == 'ly'):
             converted = value * light_year / length_unit
         else:
-            raise NameError('Unsupported length unit used')
+            raise NameError('Unsupported LENGTH unit used')
 
     elif (type == 'm'):
         if (unit == ''):
@@ -300,7 +299,7 @@ def convert(value, unit, type):
         elif (unit == 'M_solar_masses'):
             converted = value * solar_mass * 1e6 / mass_unit
         else:
-            raise NameError('Unsupported mass unit used')
+            raise NameError('Unsupported MASS unit used')
 
     elif (type == 't'):
         if (unit == ''):
@@ -314,7 +313,7 @@ def convert(value, unit, type):
         elif (unit == 'Myr'):
             converted = value * 60 * 60 * 24 * 365 * 1e6 / time_unit
         else:
-            raise NameError('Unsupported mass unit used')
+            raise NameError('Unsupported TIME unit used')
 
     elif (type == 'v'):
         if (unit == ''):
@@ -328,7 +327,7 @@ def convert(value, unit, type):
         elif (unit == 'c'):
             converted = value * time_unit / length_unit * 299792458
         else:
-            raise NameError('Unsupported speed unit used')
+            raise NameError('Unsupported SPEED unit used')
             
             
     elif (type == 'd'):
@@ -339,7 +338,7 @@ def convert(value, unit, type):
         elif (unit == 'kg/m3'):
             converted = value / mass_unit * length_unit**3
         else:
-            raise NameError('Unsupported speed unit used')
+            raise NameError('Unsupported DENSITY unit used')
 
     else:
         raise TypeError('Unsupported conversion type')
@@ -368,7 +367,7 @@ def convert_back(value, unit, type):
         elif (unit == 'ly'):
             converted = value / light_year * length_unit
         else:
-            raise NameError('Unsupported length unit used')
+            raise NameError('Unsupported LENGTH unit used')
 
     elif (type == 'm'):
         if (unit == ''):
@@ -380,7 +379,7 @@ def convert_back(value, unit, type):
         elif (unit == 'M_solar_masses'):
             converted = value / (solar_mass * 1e6) * mass_unit
         else:
-            raise NameError('Unsupported mass unit used')
+            raise NameError('Unsupported MASS unit used')
 
     elif (type == 't'):
         if (unit == ''):
@@ -394,7 +393,7 @@ def convert_back(value, unit, type):
         elif (unit == 'Myr'):
             converted = value / (60 * 60 * 24 * 365 * 1e6) * time_unit
         else:
-            raise NameError('Unsupported time unit used')
+            raise NameError('Unsupported TIME unit used')
 
     elif (type == 'v'):
         if (unit == ''):
@@ -408,7 +407,7 @@ def convert_back(value, unit, type):
         elif (unit == 'c'):
             converted = value * time_unit / length_unit / 299792458
         else:
-            raise NameError('Unsupported speed unit used')
+            raise NameError('Unsupported SPEED unit used')
             
             
     elif (type == 'd'):
@@ -419,7 +418,7 @@ def convert_back(value, unit, type):
         elif (unit == 'kg/m3'):
             converted = value * mass_unit / length_unit**3
         else:
-            raise NameError('Unsupported speed unit used')
+            raise NameError('Unsupported DENSITY unit used')
 
     else:
         raise TypeError('Unsupported conversion type')
@@ -667,7 +666,7 @@ def save_grid(
 def calculate_energiesF(save_options, resol,
         psi, cmass, TMState, masslist, Vcell, phisp, karray2, funct,
         fft_psi, ifft_funct,
-        egpcmlist, egpsilist, ekandqlist, egylist, mtotlist,xarray, yarray, zarray, a):
+        egpcmlist, egpsilist, ekandqlist, egylist, mtotlist,xarray, yarray, zarray, a, Density, Uniform):
     
     if (save_options[3]):
         
@@ -694,9 +693,13 @@ def calculate_energiesF(save_options, resol,
                 mPhi = ne.evaluate("mPhi-a*mT/(a*distarrayTM+exp(-a*distarrayTM))") # Potential Due to Test Mass
                 
                 phisp = ne.evaluate("phisp+a*mT/(a*distarrayTM+exp(-a*distarrayTM))") # Restoring Self-Interaction
-                
             
-            egyarr = ne.evaluate('real(mPhi*egyarr)')
+            if Uniform:
+                egyComp = egyarr-Density
+                egyarr = ne.evaluate('real(mPhi*egyComp)')
+                
+            else:
+                egyarr = ne.evaluate('real(mPhi*egyarr)')
             
             egpcmlist.append(Vcell * np.sum(egyarr))
             
@@ -1591,7 +1594,7 @@ PC_jit = numba.jit(planeConvolve)
     
     
 ######################### New Version With Built-in I/O Management
-def evolve(save_path,run_folder,Method = 1,Draft = True):
+def evolve(save_path,run_folder, Method = 1, Draft = True, EdgeClear = False, DumpInit = False):
     
     clear_output()
     print(f"=========={Version}: {D_version}==========")
@@ -1641,7 +1644,9 @@ def evolve(save_path,run_folder,Method = 1,Draft = True):
     else:
         NCW[0] = 1
     
-    
+    if EdgeClear:
+        print("WARNING: The Wavefunction on the boundary planes will be Auto-Zeroed at every iteration.")
+        
     masslist = []
     
     TMState = []
@@ -1857,6 +1862,23 @@ def evolve(save_path,run_folder,Method = 1,Draft = True):
     phik[0, 0, 0] = 0
     
     irfft_phi = pyfftw.builders.irfftn(phik, axes=(0, 1, 2), threads=num_threads)
+    
+    if EdgeClear:
+        
+        Cutoff = int(4)
+        
+        #x
+        psi[ 0:Cutoff,:,:] = 0
+        psi[-Cutoff:,:,:] = 0
+
+        #y
+        psi[:, 0:Cutoff,:] = 0
+        psi[:,-Cutoff:,:] = 0
+
+        #z
+        psi[:,:, 0:Cutoff] = 0
+        psi[:,:,-Cutoff:] = 0
+        
 
     ##########################################################################################
     # COMPUTE INTIAL VALUE OF POTENTIAL
@@ -1918,9 +1940,15 @@ def evolve(save_path,run_folder,Method = 1,Draft = True):
         
         # FW
     
+    
+    
+    
     masslist = np.array(masslist)
     TMState = np.array(TMState)
     TMState = TMState.flatten(order='C')
+    
+    if NumTM == 1:
+        Vinitial = TMState[3:6]
     
     TMStateDisp = TMState.reshape((-1,6))
     
@@ -1941,27 +1969,32 @@ def evolve(save_path,run_folder,Method = 1,Draft = True):
         calculate_energiesF(save_options, resol,
         psi, cmass, TMState, masslist, Vcell, phisp, karray2, funct,
         fft_psi, ifft_funct,
-        egpcmlist, egpsilist, ekandqlist, egylist, mtotlist,xarray, yarray, zarray, a )
+        egpcmlist, egpsilist, ekandqlist, egylist, mtotlist,xarray, yarray, zarray, a, Density, Uniform )
     
     GradientLog = np.zeros(NumTM*3)
     
     os.mkdir(str(loc + '/Outputs'))
 
     #######################################
-    print(f'{Version} IO: Successfully initiated Wavefunction, and NBody Initial Conditions. Dumping to file.')
     
-    file_name = f'{loc}/Initial_psi.hdf5'
-    f = h5py.File(file_name, 'w')
-    dset = f.create_dataset("init", data=psi)
-    f.close()
-    
-    file_name = f'{loc}/Initial_NBody.hdf5'
-    f = h5py.File(file_name, 'w')
-    dset = f.create_dataset("init", data=TMState)
-    f.close()
+    if DumpInit:
+        print(f'{Version} IO: Successfully initiated Wavefunction and NBody Initial Conditions. Dumping to file.')
+
+        file_name = f'{loc}/Initial_psi.hdf5'
+        f = h5py.File(file_name, 'w')
+        dset = f.create_dataset("init", data=psi)
+        f.close()
+
+        file_name = f'{loc}/Initial_NBody.hdf5'
+        f = h5py.File(file_name, 'w')
+        dset = f.create_dataset("init", data=TMState)
+        f.close()
+        
+    else:
+        print(f'{Version} IO: Successfully initiated Wavefunction and NBody Initial Conditions.')
 
 
-    if NS == 2: #Needs initiation.
+    if NS == 2: # New Integrator Needs initiation.
         
             phiGrad = np.gradient(phisp, gridvec,gridvec,gridvec, edge_order = 2)
             
@@ -2147,7 +2180,7 @@ def evolve(save_path,run_folder,Method = 1,Draft = True):
                 calculate_energiesF(save_options, resol, psi, 
                                     cmass, TMState, masslist, Vcell, phisp, karray2, funct,
                                     fft_psi, ifft_funct, egpcmlist, egpsilist, ekandqlist,
-                                    egylist, mtotlist,xarray, yarray, zarray, a)
+                                    egylist, mtotlist,xarray, yarray, zarray, a, Density, Uniform)
 
            
         ################################################################################
@@ -2171,7 +2204,15 @@ def evolve(save_path,run_folder,Method = 1,Draft = True):
                 np.save(os.path.join(os.path.expanduser(loc), "Outputs/ekandqlist.npy"), ekandqlist)
                 np.save(os.path.join(os.path.expanduser(loc), "Outputs/masseslist.npy"), mtotlist)
 
-
+        # New Feature
+        if (NumTM == 1):
+            Vcurrent = TMState[3:6]
+            
+            if np.dot(Vinitial,Vcurrent)<=0:
+                
+                print(f"{Version} Runtime: Black Hole Has Stopped. Halting Integration.")
+                
+                break
         ################################################################################
         # UPDATE INFORMATION FOR PROGRESS BAR
 

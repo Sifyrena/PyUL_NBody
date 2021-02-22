@@ -1,6 +1,6 @@
 Version   = str('ULHelper') # Handle used in console.
-D_version = str('Helper Build 2020 12 01') # Detailed Version
-S_version = 7 # Short Version
+D_version = str('Helper Build 2021 02 20') # Detailed Version
+S_version = 8 # Short Version
 
 print(D_version)
 
@@ -61,7 +61,7 @@ def SSEst(save_options, save_number, resol):
     if save_testmass:
         print('ULHelper: Saving NBody Position Data')
     
-    return (save_number+1)*(PreMult)*8/(1024**3) + (2*resol**3)*8/(1024**3)
+    return (save_number+1)*(PreMult)*8/(1024**3)
     
     
 
@@ -617,6 +617,107 @@ def GenerateConfig(NS, central_mass, length, length_units, resol, duration, dura
             
         return timestamp
     
+
+def GenerateConfig_NI(NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_path, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles,embeds, Uniform,Density,density_unit,a, NCV,NCW, RunName = ''):
+    
+    tm = time.localtime()
+    if RunName == '':
+        
+        talt = ['0', '0', '0']
+        for i in range(3, 6):
+            if tm[i] in range(0, 10):
+                talt[i - 3] = '{}{}'.format('0', tm[i])
+            else:
+                talt[i - 3] = tm[i]
+        
+        timestamp = '{}{}{}{}{}{}{}{}{}{}{}{}{}'.format(tm[0], '', tm[1], '', tm[2], '_', talt[0], '', talt[1], '', talt[2], '@', resol)
+        
+    else:
+        timestamp = RunName
+        
+        
+    os.makedirs('{}{}{}{}'.format('./', save_path, '/', timestamp))
+
+
+    Conf_data = {}
+
+    Conf_data['Helper Version'] = D_version
+
+    Conf_data['Config Generation Time'] = tm
+
+    Conf_data['Save Options'] = ({
+            'flags': save_options,
+            'folder': save_path,
+            'number': save_number,
+            'npz': npz,
+            'npy': npy,
+            'hdf5': hdf5
+            })
+
+
+    Conf_data['Spacial Resolution'] = resol
+
+    Conf_data['Temporal Step Factor'] = step_factor
+
+    Conf_data['RK Steps'] = NS
+
+    Conf_data['Duration'] = ({
+            'Time Duration': duration,
+            'Start Time': start_time,
+            'Time Units': duration_units
+            })
+
+
+    Conf_data['Simulation Box'] = ({
+    'Box Length': length,
+    'Length Units': length_units,
+    })
+
+
+    Conf_data['ULDM Solitons'] = ({
+    'Condition': solitons,
+    'Embedded': embeds,
+    'Mass Units': s_mass_unit,
+    'Position Units': s_position_unit,
+    'Velocity Units': s_velocity_unit
+    })
+
+
+    particles = EmbedParticle(particles,embeds)
+
+    Conf_data['Matter Particles'] = ({
+    'Condition': particles,
+    'Mass Units': m_mass_unit,
+    'Position Units': m_position_unit,
+    'Velocity Units': m_velocity_unit
+    })
+
+    Conf_data['Field-averaging Probes'] = ({
+
+            'Probe Array': NCV.tolist(),
+            'Probe Weights': NCW.tolist()
+
+            })
+
+    Conf_data['Central Mass'] = central_mass
+
+    Conf_data['Field Smoothing'] = a
+
+
+    Conf_data['Uniform Field Override'] = ({
+
+            'Flag': Uniform,
+            'Density Unit': density_unit,
+            'Density Value': Density
+
+            })
+
+
+    with open('{}{}{}{}{}'.format('./', save_path, '/', timestamp, '/config.txt'), "w+") as outfile:
+        json.dump(Conf_data, outfile,indent=4)
+
+    print('ULHelper: Compiled Config in Folder', timestamp)
+
 
 def Runs(save_path):
     runs = os.listdir(save_path)
