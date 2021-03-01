@@ -1,6 +1,6 @@
 Version   = str('PyULN') # Handle used in console.
-D_version = str('Integrator Build 2021 02 20') # Detailed Version
-S_version = 12
+D_version = str('Integrator Build 2021 03 01') # Detailed Version
+S_version = 14
  # Short Version
 
 import time
@@ -633,8 +633,7 @@ def save_grid(
                 f = h5py.File(file_name, 'w')
                 dset = f.create_dataset("init", data=GradientLog)
                 f.close()
-                
-                
+
         if (save_options[9]): # Temporarily Appropriated!
             
             psislice = psi[:, :, int(resol / 2)]
@@ -670,14 +669,15 @@ def calculate_energiesF(save_options, resol,
     
     if (save_options[3]):
         
-            egyarr = pyfftw.zeros_aligned((resol, resol, resol), dtype='float64')
             
             mPhi = pyfftw.zeros_aligned((resol, resol, resol), dtype='float64')
+            
+            egyarr = ne.evaluate('real((abs(psi))**2)') # Density tensor
+            
+            BoxAvg = np.mean(egyarr) # Mean Value in Box
 
             # Gravitational potential energy density associated with the point masses potential
-            
-            egyarr = ne.evaluate('real((abs(psi))**2)')
-            
+
             for MI in range(len(masslist)):
         
                 State = TMState[int(MI*6):int(MI*6+5)]
@@ -689,17 +689,21 @@ def calculate_energiesF(save_options, resol,
                 mT = masslist[MI]
             
                 distarrayTM = ne.evaluate("((xarray-TMx)**2+(yarray-TMy)**2+(zarray-TMz)**2)**0.5") # Radial coordinates
-                                
-                mPhi = ne.evaluate("mPhi-a*mT/(a*distarrayTM+exp(-a*distarrayTM))") # Potential Due to Test Mass
                 
-                phisp = ne.evaluate("phisp+a*mT/(a*distarrayTM+exp(-a*distarrayTM))") # Restoring Self-Interaction
+                if a == 0:
+                    mPhi = ne.evaluate("mPhi-mT/(distarrayTM)")
+                else:
+                    mPhi = ne.evaluate("mPhi-a*mT/(a*distarrayTM+exp(-a*distarrayTM))") # Potential Due to Test Mass
+                
+            phisp = ne.evaluate("phisp+mPhi") # Adding the same amount back.
             
             if Uniform:
                 egyComp = egyarr-Density
-                egyarr = ne.evaluate('real(mPhi*egyComp)')
                 
             else:
-                egyarr = ne.evaluate('real(mPhi*egyarr)')
+                egyComp = egyarr-BoxAvg
+                
+            egyarr = ne.evaluate('real(mPhi*egyComp)') # Interaction in particle potential!.
             
             egpcmlist.append(Vcell * np.sum(egyarr))
             
@@ -850,7 +854,11 @@ def FWNBodyR(t,TMState,masslist,FieldFT,gridlength,resol,Kx,Ky,Kz,a,HWHM,NCV,NCW
                 
                 rVL = np.linalg.norm(rV)
                 
-                rSmooth = (-a**2+a**2*np.exp(-a*rVL))/(rVL*(a*rVL+np.exp(-a*rVL))**2)
+                
+                if a == 0:
+                    rSmooth = 1/(rVL)**3
+                else:
+                    rSmooth = (-a**2+a**2*np.exp(-a*rVL))/(rVL*(a*rVL+np.exp(-a*rVL))**2)
                 
                 # Differentiated within Note 000.0F
                 
@@ -940,7 +948,10 @@ def FWNBodyI(t,TMState,masslist,GxI,GyI,GzI,a,HWHM,NCV,NCW):
                 
                 rVL = np.linalg.norm(rV)
                 
-                rSmooth = (-a**2+a**2*np.exp(-a*rVL))/(rVL*(a*rVL+np.exp(-a*rVL))**2)
+                if a == 0:
+                    rSmooth = 1/(rVL)**3
+                else:
+                    rSmooth = (-a**2+a**2*np.exp(-a*rVL))/(rVL*(a*rVL+np.exp(-a*rVL))**2)
                 
                 # Differentiated within Note 000.0F
                 
@@ -957,6 +968,151 @@ def FWNBodyI(t,TMState,masslist,GxI,GyI,GzI,a,HWHM,NCV,NCW):
                 
     return dTMdt, GradientLog
 
+
+def InterpolateLocal(RRem,Input):
+        
+    while len(RRem) > 1:
+                    
+        Input = Input[1,:]*RRem[0] + Input[0,:]*(1-RRem[0])
+        RRem = RRem[1:]
+        InterpolateLocal(RRem,Input)
+        
+    else:
+        return Input[1]*RRem + Input[0]*(1-RRem)
+
+def FWNBody3(t,TMState,masslist,phisp,a,gridlength,resol):
+
+    GridDist = gridlength/resol
+    
+    dTMdt = 0*TMState
+    GradientLog = np.zeros(len(masslist)*3)
+    
+    for i in range(len(masslist)):
+        
+        #0,6,12,18,...
+        Ind = int(6*i)
+        IndD = int(3*i)
+           
+        #X,Y,Z
+        poslocal = TMState[Ind:Ind+3]
+        
+        RNum = (poslocal*1/gridlength+1/2)*resol
+        RPt = np.floor(RNum)
+        RRem = RNum - RPt
+
+        # Need special treatment if any of these is zero or close to resol!
+        RPtX = int(RPt[0])
+        RPtY = int(RPt[1])
+        RPtZ = int(RPt[2])
+
+        if (RPtX == 0) or (RPtY == 0) or (RPtZ == 0):
+            print('Plan A')
+            TAr = np.zeros([4,4,4])
+
+        elif (RPtX >= resol-4) or (RPtY >= resol-4) or (RPtZ >= resol-4):
+            print('Plan B')
+            TAr = np.zeros([4,4,4])
+
+        else:    
+            TAr = phisp[RPtX-1:RPtX+3,RPtY-1:RPtY+3,RPtZ-1:RPtZ+3] # 64 Local Grids
+
+        GArX = (TAr[2:4,1:3,1:3] - TAr[0:2,1:3,1:3])/(2*GridDist) # 8
+
+        GArY = (TAr[1:3,2:4,1:3] - TAr[1:3,0:2,1:3])/(2*GridDist) # 8
+
+        GArZ = (TAr[1:3,1:3,2:4] - TAr[1:3,1:3,2:4])/(2*GridDist) # 8
+
+        GradientX = InterpolateLocal(RRem,GArX)
+
+        GradientY = InterpolateLocal(RRem,GArY)
+
+        GradientZ = InterpolateLocal(RRem,GArZ)
+
+        #XDOT
+        dTMdt[Ind]   =  TMState[Ind+3]
+        #YDOT
+        dTMdt[Ind+1] =  TMState[Ind+4]
+        #ZDOT
+        dTMdt[Ind+2] =  TMState[Ind+5]
+        
+        #x,y,z
+        
+        GradientLocal = -1*np.array([[GradientX],[GradientY],[GradientZ]])
+
+        #Initialized Against ULDM Field
+        #XDDOT
+        dTMdt[Ind+3] =  GradientLocal[0]
+        #YDDOT
+        dTMdt[Ind+4] =  GradientLocal[1]
+        #ZDDOT
+        dTMdt[Ind+5] =  GradientLocal[2]
+    
+        for ii in range(len(masslist)):
+            
+            if ii != i:
+                
+                IndX = int(6*ii)
+                
+                # print(ii)
+                
+                poslocalX = np.array([TMState[IndX],TMState[IndX+1],TMState[IndX+2]])
+                
+                rV = poslocalX - poslocal
+                
+                rVL = np.linalg.norm(rV)
+                
+                
+                if a ==0:
+                    rSmooth = 1/(rVL)**3
+                else:
+                    rSmooth = (-a**2+a**2*np.exp(-a*rVL))/(rVL*(a*rVL+np.exp(-a*rVL))**2)
+                
+                # Differentiated within Note 000.0F
+                
+                #XDDOT with Gravity
+                dTMdt[Ind+3] = dTMdt[Ind+3] - masslist[ii]*rSmooth*rV[0]
+                #YDDOT
+                dTMdt[Ind+4] = dTMdt[Ind+4] - masslist[ii]*rSmooth*rV[1]
+                #ZDDOT
+                dTMdt[Ind+5] = dTMdt[Ind+5] - masslist[ii]*rSmooth*rV[2]
+        
+        GradientLog[IndD] = GradientLocal[0]
+        GradientLog[IndD+1] = GradientLocal[1]
+        GradientLog[IndD+2] = GradientLocal[2]
+                
+    return dTMdt, GradientLog
+
+
+
+def FWNBodyAdvance3(TMState,h,masslist,phisp,a,gridlength,resol,NS):
+        #
+        if NS == 0:
+            NS = 1
+        if NS == 1:
+ 
+            Step, GradientLog = FWNBody3(0,TMState,masslist,phisp,a,gridlength,resol)
+            
+            TMStateOut = TMState + Step*h
+            
+            return TMStateOut, GradientLog
+        
+        elif NS%4 == 0:
+            
+            NRK = int(NS/4)
+            
+            H = h/NRK
+            
+            for RKI in range(NRK):
+                TMK1, Trash = FWNBody3(0,TMState,masslist,phisp,a,gridlength,resol)
+                TMK2, Trash = FWNBody3(0,TMState + H/2*TMK1,masslist,phisp,a,gridlength,resol)
+                TMK3, Trash = FWNBody3(0,TMState + H/2*TMK2,masslist,phisp,a,gridlength,resol)
+                TMK4, GradientLog = FWNBody3(0,TMState + H*TMK3,masslist,phisp,a,gridlength,resol)
+                TMState = TMState + H/6*(TMK1+2*TMK2+2*TMK3+TMK4)
+                
+            TMStateOut = TMState
+
+            return TMStateOut, GradientLog
+
 def FloaterAdvanceI(TMState,h,masslist,NS,GxI,GyI,GzI,a,HWHM,NCV,NCW,PossXP=0,PossYP= 0,PossZP=0):
         # We pass on phik into the Gradient Function Above. This saves one inverse FFT call.
         # The N-Body Simulation is written from scratch
@@ -966,48 +1122,12 @@ def FloaterAdvanceI(TMState,h,masslist,NS,GxI,GyI,GzI,a,HWHM,NCV,NCW,PossXP=0,Po
             NS = 1
         if NS == 1:
  
-            Step, GradientLog = FWNBodyI_jit(0,TMState,masslist,GxI,GyI,GzI,a,HWHM,NCV,NCW)
+            Step, GradientLog = FWNBodyI(0,TMState,masslist,GxI,GyI,GzI,a,HWHM,NCV,NCW)
             
             TMStateOut = TMState + Step*h
             
             return TMStateOut, GradientLog
-        
-        elif NS == 2:
-            # Using the SV Integrator seen in projectile simulation. Order 4.
-            Step, GradientLog = FWNBodyI_jit(0,TMState,masslist,GxI,GyI,GzI,a,HWHM,NCV,NCW)    
-            
-            PossX = TMState[0::6]
-            PossY = TMState[1::6]
-            PossZ = TMState[2::6]
-                      
-            VelX = TMState[3::6]
-            VelY = TMState[4::6]
-            VelZ = TMState[5::6]
-            
-            GradX = Step[3::6]
-            GradY = Step[4::6]
-            GradZ = Step[5::6]
-            
-            # How it actually goes
-            
-            PossXN = 2*PossX - PossXP + GradX*h**2
-            PossYN = 2*PossY - PossYP + GradY*h**2
-            PossZN = 2*PossZ - PossZP + GradZ*h**2
-            
-            VelX = (PossXN-PossXP)/(2*h)
-            VelY = (PossYN-PossYP)/(2*h)
-            VelZ = (PossZN-PossZP)/(2*h)
-            
-            PossXP = PossX 
-            PossYP = PossY 
-            PossZP = PossZ 
-            
-            TMStateStack = np.array([PossXN,PossYN,PossZN,VelX,VelY,VelZ])
-            
-            TMStateOut = TMStateStack.flatten(order='F')
-            
-            return TMStateOut, GradientLog, PossXP,PossYP,PossZP
-            
+      
             
         elif NS%4 == 0:
             
@@ -1016,10 +1136,10 @@ def FloaterAdvanceI(TMState,h,masslist,NS,GxI,GyI,GzI,a,HWHM,NCV,NCW,PossXP=0,Po
             H = h/NRK
             
             for RKI in range(NRK):
-                TMK1, Trash = FWNBodyI_jit(0,TMState,masslist,GxI,GyI,GzI,a,HWHM,NCV,NCW)
-                TMK2, Trash = FWNBodyI_jit(0,TMState + H/2*TMK1,masslist,GxI,GyI,GzI,a,HWHM,NCV,NCW)
-                TMK3, Trash = FWNBodyI_jit(0,TMState + H/2*TMK2,masslist,GxI,GyI,GzI,a,HWHM,NCV,NCW)
-                TMK4, GradientLog = FWNBodyI_jit(0,TMState + H*TMK3,masslist,GxI,GyI,GzI,a,HWHM,NCV,NCW)
+                TMK1, Trash = FWNBodyI(0,TMState,masslist,GxI,GyI,GzI,a,HWHM,NCV,NCW)
+                TMK2, Trash = FWNBodyI(0,TMState + H/2*TMK1,masslist,GxI,GyI,GzI,a,HWHM,NCV,NCW)
+                TMK3, Trash = FWNBodyI(0,TMState + H/2*TMK2,masslist,GxI,GyI,GzI,a,HWHM,NCV,NCW)
+                TMK4, GradientLog = FWNBodyI(0,TMState + H*TMK3,masslist,GxI,GyI,GzI,a,HWHM,NCV,NCW)
                 TMState = TMState + H/6*(TMK1+2*TMK2+2*TMK3+TMK4)
                 
             TMStateOut = TMState
@@ -1309,8 +1429,12 @@ def SolitonProfile(BHMass,s,Smoo,Production):
 
     verbose_output = True # If true, s value of every attempt will be printed in console.
 
-    def g1(r, a, b, c, BHmass = BHmass):
-        return -(2/r)*c+2*b*a - 2*(Smoo*BHmass / (Smoo*r+np.exp(-Smoo*r)))*a + 2 * Lambda * a **3
+    if Smoo == 0:
+        def g1(r, a, b, c, BHmass = BHmass):
+            return -(2/r)*c+2*b*a - 2*(BHmass / r)*a + 2 * Lambda * a **3
+    else:
+        def g1(r, a, b, c, BHmass = BHmass):
+            return -(2/r)*c+2*b*a - 2*(Smoo*BHmass / (Smoo*r+np.exp(-Smoo*r)))*a + 2 * Lambda * a **3
 
     def g2(r, a, d):
         return 4*np.pi*a**2-(2/r)*d
@@ -1582,11 +1706,7 @@ def LoadSoliton(Ratio):
 
 print(f'{Version} Runtime: JIT optimisations under development. Please ignore Numba warnings for now.')
 
-FloaterAdvanceI_jit = numba.jit(FloaterAdvanceI)
-
 initsoliton_jit = numba.jit(initsoliton)
-
-FWNBodyI_jit = numba.jit(FWNBodyI)
 
 IP_jit = numba.jit(isolatedPotential)
 
@@ -1594,17 +1714,18 @@ PC_jit = numba.jit(planeConvolve)
     
     
 ######################### New Version With Built-in I/O Management
-def evolve(save_path,run_folder, Method = 1, Draft = True, EdgeClear = False, DumpInit = False):
+def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, DumpInit = False):
     
     clear_output()
     print(f"=========={Version}: {D_version}==========")
-    
+        
     timestamp = run_folder
     
     configfile = './' + save_path + '/' + run_folder
     
     file = open('{}{}{}'.format('./', save_path, '/latest.txt'), "w+")
     file.write(run_folder)
+    file.close()
     
     loc = configfile
             
@@ -1614,7 +1735,11 @@ def evolve(save_path,run_folder, Method = 1, Draft = True, EdgeClear = False, Du
 
     # Embedded particles are Pre-compiled into the list.
     
-    print(f"{Version} IO   : Loaded Parameters from {configfile}")
+    if a>=1e6:
+        print(f"{Version} IO: Smoothing factor has been reset!")
+        a = 0
+    
+    print(f"{Version} IO: Loaded Parameters from {configfile}")
 
     NumSol = len(solitons)
     NumTM = len(particles)
@@ -1622,22 +1747,24 @@ def evolve(save_path,run_folder, Method = 1, Draft = True, EdgeClear = False, Du
     if Method == 2:
         print(f"{Version} NBody: Using DCT Sum interpolation For gravity.")
             
-    if Method == 1: # 1 = Real Space Interpolation (Orange), 2 = Fourier Sum (White)
+    if (Method == 1) or (Method == 3): # 1 = Real Space Interpolation (Orange), 2 = Fourier Sum (White)
         print(f"{Version} NBody: Using Linear Interpolation for gravity.")
-    
-    print(f"{Version} NBody: The point mass field smoothing factor is {a:.5f}.")
     
     print(f"{Version} SP: Simulation grid resolution is {resol}^3.")
     
-    HWHM = (LW(-np.exp(-2))+2)/a # inversely proportional to a.
-    
-    HWHM = np.real(HWHM)
-    
-    if HWHM > length / 4:
-        print("WARNING: Field Smoothing factor too small, and the perfomance will be compromised.")
-    
-    if HWHM <= length / (4*resol):
-        print("WARNING: The field peak is narrower than half a grid. There may be artifitial energy fluctuations.")
+    if a == 0:
+        print(f"{Version} NBody: Using 1/r Point Mass Potential.")
+        HWHM = length/(2*resol)
+    else: 
+        print(f"{Version} NBody: The point mass field smoothing factor is {a:.5f}.")
+        HWHM = (LW(-np.exp(-2))+2)/a # inversely proportional to a.
+        HWHM = np.real(HWHM)
+
+        if HWHM > length / 4:
+            print("WARNING: Field Smoothing factor too small, and the perfomance will be compromised.")
+
+        if HWHM <= length / (4*resol):
+            print("WARNING: The field peak is narrower than half a grid. There may be artifitial energy fluctuations.")
     
     if np.sum(NCW) != 0:
         NCW = NCW/np.sum(NCW) # Normalized to 1
@@ -1689,7 +1816,7 @@ def evolve(save_path,run_folder, Method = 1, Draft = True, EdgeClear = False, Du
     Kx,Ky,Kz = np.meshgrid(WN,WN,WN,sparse=True, indexing='ij',)
     
     ##########################################################################################
-    # SET UP K-SPACE COORDINATES FOR COMPLEX DFT (NOT RHO DFT)
+    # SET UP K-SPACE COORDINATES FOR COMPLEX DFT
 
     kvec = 2 * np.pi * np.fft.fftfreq(resol, gridlength / float(resol))
     
@@ -1934,7 +2061,10 @@ def evolve(save_path,run_folder, Method = 1, Draft = True, EdgeClear = False, Du
         
         TMState.append([TMx,TMy,TMz,Vx,Vy,Vz])
         
-        phisp = ne.evaluate("phisp-a*TMmass/(a*distarrayTM+exp(-a*distarrayTM))")
+        if a == 0:
+            phisp = ne.evaluate("phisp-TMmass/(distarrayTM)")
+        else:
+            phisp = ne.evaluate("phisp-a*TMmass/(a*distarrayTM+exp(-a*distarrayTM))")
         
         MI = int(MI + 1)
         
@@ -1994,61 +2124,6 @@ def evolve(save_path,run_folder, Method = 1, Draft = True, EdgeClear = False, Du
         print(f'{Version} IO: Successfully initiated Wavefunction and NBody Initial Conditions.')
 
 
-    if NS == 2: # New Integrator Needs initiation.
-        
-            phiGrad = np.gradient(phisp, gridvec,gridvec,gridvec, edge_order = 2)
-            
-            phiGradX = phiGrad[0]
-            
-            GxI = RPI([gridvec,gridvec,gridvec],phiGradX,method = 'linear',bounds_error = False, fill_value = 0)
-            
-            phiGradY = phiGrad[1]
-            
-            GyI = RPI([gridvec,gridvec,gridvec],phiGradY,method = 'linear',bounds_error = False, fill_value = 0)
-            
-            phiGradZ = phiGrad[2]
-            
-            GzI = RPI([gridvec,gridvec,gridvec],phiGradZ,method = 'linear',bounds_error = False, fill_value = 0)
-            
-            Step, GradientLog = FWNBodyI_jit(0,TMState,masslist,GxI,GyI,GzI,a,HWHM,NCV,NCW)  
-            
-            # Digest TMState
-            
-            PossX = TMState[0::6]
-            PossY = TMState[1::6]
-            PossZ = TMState[2::6]
-                      
-            VelX = TMState[3::6]
-            VelY = TMState[4::6]
-            VelZ = TMState[5::6]
-            
-            #print(VelX,VelY,VelZ)
-            
-            GradX = Step[3::6]
-            GradY = Step[4::6]
-            GradZ = Step[5::6]
-            
-            # Initialize
-            
-            
-            PossXN = PossX + VelX*h + 1/2*GradX*h**2
-            PossYN = PossY + VelY*h + 1/2*GradY*h**2
-            PossZN = PossZ + VelZ*h + 1/2*GradZ*h**2
-            
-            VelX = (PossXN-PossX)/(h)
-            VelY = (PossYN-PossY)/(h)
-            VelZ = (PossZN-PossZ)/(h)
-            
-            # print(VelX,VelY,VelZ)
-            # Past Positions
-            
-            PossXP = PossX 
-            PossYP = PossY 
-            PossZP = PossZ 
-            
-            TMStateStack = np.array([PossXN,PossYN,PossZN,VelX,VelY,VelZ])
-            
-            TMState = TMStateStack.flatten(order='F')
     
     ##########################################################################################
     # PRE-LOOP SAVE I.E. INITIAL CONFIG
@@ -2113,7 +2188,7 @@ def evolve(save_path,run_folder, Method = 1, Draft = True, EdgeClear = False, Du
             phisp = IP_jit(rho, green, gridlength, fft_X, ifft_X, fft_plane, ifft_plane)
         
             
-        # FW TEST STEP MAGIC HAPPENS HERE
+        # FW STEP MAGIC HAPPENS HERE
 
         if Method == 2:
             TMState, GradientLog = FloaterAdvanceR(TMState,h,masslist,NS,FieldFT,masslist,gridlength,resol,Kx,Ky,Kz,a, HWHM,NCV,NCW)
@@ -2135,10 +2210,11 @@ def evolve(save_path,run_folder, Method = 1, Draft = True, EdgeClear = False, Du
             GzI = RPI([gridvec,gridvec,gridvec],phiGradZ,method = 'linear',bounds_error = False, fill_value = 0)
             
             if NS!=2:
-                TMState, GradientLog = FloaterAdvanceI_jit(TMState,h,masslist,NS,GxI,GyI,GzI,a,HWHM,NCV,NCW)
+                TMState, GradientLog = FloaterAdvanceI(TMState,h,masslist,NS,GxI,GyI,GzI,a,HWHM,NCV,NCW)   
+                
+        elif Method == 3:
             
-            else: 
-                TMState, GradientLog, PossXN,PossYN,PossZN = FloaterAdvanceI_jit(TMState,h,masslist,NS,GxI,GyI,GzI,a,HWHM,NCV,NCW,PossXN,PossYN,PossZN)
+            TMState, GradientLog = FWNBodyAdvance3(TMState,h,masslist,phisp,a,gridlength,resol,NS)
     
         for MI in range(NumTM):
         
@@ -2163,8 +2239,10 @@ def evolve(save_path,run_folder, Method = 1, Draft = True, EdgeClear = False, Du
             mT = masslist[MI]
             
             distarrayTM = ne.evaluate("((xarray-TMx)**2+(yarray-TMy)**2+(zarray-TMz)**2)**0.5") # Radial coordinates
-        
-            phisp = ne.evaluate("phisp-a*mT/(a*distarrayTM+exp(-a*distarrayTM))")
+            if a == 0:
+                phisp = ne.evaluate("phisp-mT/(distarrayTM)")
+            else:
+                phisp = ne.evaluate("phisp-a*mT/(a*distarrayTM+exp(-a*distarrayTM))")
             
         #phisp = ne.evaluate("phisp-a*cmass/(a*distarray+exp(-a*distarray))")
 
@@ -2204,13 +2282,14 @@ def evolve(save_path,run_folder, Method = 1, Draft = True, EdgeClear = False, Du
                 np.save(os.path.join(os.path.expanduser(loc), "Outputs/ekandqlist.npy"), ekandqlist)
                 np.save(os.path.join(os.path.expanduser(loc), "Outputs/masseslist.npy"), mtotlist)
 
-        # New Feature
-        if (NumTM == 1):
+        # New Feature for Dyn Drag
+        if (NumTM == 1) and Uniform:
+            
             Vcurrent = TMState[3:6]
             
             if np.dot(Vinitial,Vcurrent)<=0:
                 
-                print(f"{Version} Runtime: Black Hole Has Stopped. Halting Integration.")
+                print(f"\n{Version} Runtime: Black Hole Has Stopped. Halting Integration.")
                 
                 break
         ################################################################################
