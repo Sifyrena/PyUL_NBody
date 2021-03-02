@@ -1,6 +1,6 @@
 Version   = str('ULHelper') # Handle used in console.
-D_version = str('Helper Build 2021 02 20') # Detailed Version
-S_version = 8 # Short Version
+D_version = str('Helper Build 2021 03 02') # Detailed Version
+S_version = 9 # Short Version
 
 print(D_version)
 
@@ -199,6 +199,10 @@ def SmoothingReport(a,resol,clength):
     
 
     GridLenFS = clength/(resol)
+    
+    COMin = resol/2
+    COMid = resol/2*np.sqrt(2)
+    COMax = resol/2*np.sqrt(3)
    
     fig_grav = plt.figure(figsize=(12, 12))
 
@@ -208,7 +212,7 @@ def SmoothingReport(a,resol,clength):
     ax2 = plt.subplot(212)
     
     
-    FS = np.linspace(1,50,50)
+    FS = np.arange(resol)+1
     
     rR = GridLenFS*FS
     
@@ -226,14 +230,17 @@ def SmoothingReport(a,resol,clength):
     rQ = FS[BoundaryEx]
     
     ax1.plot(FS,GOrig,'k--',label = 'Point Potential')
+       
     
-    ax1.plot([rS,rS],[2,-100],'r.-')
-    ax1.plot([rQ,rQ],[2,-100],'b.-')
-    
-    
-    ax1.plot(FS,GMod,'go',label = 'Modified Potential')
-    
+    ax1.plot(FS,GMod,'g.',label = 'Modified Potential')
+        
     ax1.set_ylim([-1.5*a,0])
+    
+    
+    ax1.vlines(rS,-1.5*a,0,color = 'red')
+    ax1.vlines(rQ,-1.5*a,0,color = 'blue')
+    
+    ax1.vlines([COMin,COMid,COMax],-1.5*a,0,color = 'black')
     
     ax1.legend()
     
@@ -243,8 +250,10 @@ def SmoothingReport(a,resol,clength):
     ax2.semilogy(FS,(GDiff),'g.')
     ax2.set_xlabel('Radial distance from origin (Grids)')
     ax2.set_ylabel('Difference')
-    ax2.semilogy([rS,rS],[1e2,1e-16],'r.-')
-    ax2.semilogy([rQ,rQ],[1e2,1e-16],'b.-')
+    ax2.vlines(rS,0,1e5,color = 'red')
+    ax2.vlines(rQ,0,1e5,color = 'blue')
+    
+    ax2.set_ylim([np.min(GDiff),np.max(GDiff)])
     ax2.grid()
     
     plt.show()
@@ -509,133 +518,44 @@ def EmbedParticle(particles,embeds):
     return particles
         
        
+def GenFromTime():
+    tm = time.localtime()
+    talt = ['0', '0', '0']
+    for i in range(3, 6):
+        if tm[i] in range(0, 10):
+            talt[i - 3] = '{}{}'.format('0', tm[i])
+        else:
+            talt[i - 3] = tm[i]
+    timestamp = '{}{}{}{}{}{}{}{}{}'.format(tm[0], tm[1], tm[2], '_', talt[0], '', talt[1], '', talt[2])
     
-def GenerateConfig(NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_path, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles,embeds, Uniform,Density,density_unit,a, NCV,NCW
+    return timestamp
+
+
+def GenerateConfig(NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_path, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles,embeds, Uniform,Density,density_unit,a,B,UVel,NoInteraction = False,Name = ''
            ):
-    
-        tm = time.localtime()
 
+    tm = GenFromTime()
+    if NoInteraction:
 
-        print("What is the name of the run? Leave blank to use automatically generated timestamp.")
-        InputName = input()
-        
-        if InputName != "":
-            
-            timestamp = InputName
+        if Name != '':
+            timestamp = Name
             
         else:
-            
-            talt = ['0', '0', '0']
-            for i in range(3, 6):
-                if tm[i] in range(0, 10):
-                    talt[i - 3] = '{}{}'.format('0', tm[i])
-                else:
-                    talt[i - 3] = tm[i]
-            timestamp = '{}{}{}{}{}{}{}{}{}{}{}{}{}'.format(tm[0], '', tm[1], '', tm[2], '_', talt[0], '', talt[1], '', talt[2], '@', resol)
+            timestamp = tm + f'@{resol}'
         
-        os.makedirs('{}{}{}{}'.format('./', save_path, '/', timestamp))
-        
-        
-        Conf_data = {}
-        
-        Conf_data['Helper Version'] = D_version
-        
-        Conf_data['Config Generation Time'] = tm
-        
-        Conf_data['Save Options'] = ({
-                'flags': save_options,
-                'folder': save_path,
-                'number': save_number,
-                'npz': npz,
-                'npy': npy,
-                'hdf5': hdf5
-                })
-        
-        
-        Conf_data['Spacial Resolution'] = resol
-        
-        Conf_data['Temporal Step Factor'] = step_factor
-        
-        Conf_data['RK Steps'] = NS
-        
-        Conf_data['Duration'] = ({
-                'Time Duration': duration,
-                'Start Time': start_time,
-                'Time Units': duration_units
-                })
-    
-        
-        Conf_data['Simulation Box'] = ({
-        'Box Length': length,
-        'Length Units': length_units,
-        })
-        
-        
-        Conf_data['ULDM Solitons'] = ({
-        'Condition': solitons,
-        'Embedded': embeds,
-        'Mass Units': s_mass_unit,
-        'Position Units': s_position_unit,
-        'Velocity Units': s_velocity_unit
-        })
-        
-        
-        particles = EmbedParticle(particles,embeds)
-        
-        Conf_data['Matter Particles'] = ({
-        'Condition': particles,
-        'Mass Units': m_mass_unit,
-        'Position Units': m_position_unit,
-        'Velocity Units': m_velocity_unit
-        })
-        
-        Conf_data['Field-averaging Probes'] = ({
-                
-                'Probe Array': NCV.tolist(),
-                'Probe Weights': NCW.tolist()
-                
-                })
-        
-        Conf_data['Central Mass'] = central_mass
-        
-        Conf_data['Field Smoothing'] = a
-        
-        
-        Conf_data['Uniform Field Override'] = ({
-                
-                'Flag': Uniform,
-                'Density Unit': density_unit,
-                'Density Value': Density
-                
-                })
-        
-        
-        with open('{}{}{}{}{}'.format('./', save_path, '/', timestamp, '/config.txt'), "w+") as outfile:
-            json.dump(Conf_data, outfile,indent=4)
-            
-        print('ULHelper: Compiled Config in Folder', timestamp)
-            
-        return timestamp
-    
-
-def GenerateConfig_NI(NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_path, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles,embeds, Uniform,Density,density_unit,a, NCV,NCW, RunName = ''):
-    
-    tm = time.localtime()
-    if RunName == '':
-        
-        talt = ['0', '0', '0']
-        for i in range(3, 6):
-            if tm[i] in range(0, 10):
-                talt[i - 3] = '{}{}'.format('0', tm[i])
-            else:
-                talt[i - 3] = tm[i]
-        
-        timestamp = '{}{}{}{}{}{}{}{}{}{}{}{}{}'.format(tm[0], '', tm[1], '', tm[2], '_', talt[0], '', talt[1], '', talt[2], '@', resol)
         
     else:
-        timestamp = RunName
-        
-        
+        print("What is the name of the run? Leave blank to use automatically generated timestamp.")
+        InputName = input()
+
+        if InputName != "":
+            timestamp = InputName
+
+        else:
+            timestamp = tm + f'@{resol}'
+
+           
+
     os.makedirs('{}{}{}{}'.format('./', save_path, '/', timestamp))
 
 
@@ -694,8 +614,8 @@ def GenerateConfig_NI(NS, central_mass, length, length_units, resol, duration, d
 
     Conf_data['Field-averaging Probes'] = ({
 
-            'Probe Array': NCV.tolist(),
-            'Probe Weights': NCW.tolist()
+            'Probe Array': 'Defunct',
+            'Probe Weights': 'Defunct' 
 
             })
 
@@ -703,12 +623,15 @@ def GenerateConfig_NI(NS, central_mass, length, length_units, resol, duration, d
 
     Conf_data['Field Smoothing'] = a
 
+    Conf_data['NBody Cutoff Factor'] = B
+
 
     Conf_data['Uniform Field Override'] = ({
 
             'Flag': Uniform,
             'Density Unit': density_unit,
-            'Density Value': Density
+            'Density Value': Density,
+            'Uniform Velocity': UVel
 
             })
 
@@ -718,7 +641,8 @@ def GenerateConfig_NI(NS, central_mass, length, length_units, resol, duration, d
 
     print('ULHelper: Compiled Config in Folder', timestamp)
 
-
+    return timestamp
+    
 def Runs(save_path):
     runs = os.listdir(save_path)
     runs.sort()
@@ -796,13 +720,14 @@ def LoadConfig(loc):
         
         a = config["Field Smoothing"]
         
+        B = config['NBody Cutoff Factor']
+        
         resol = int(config["Spacial Resolution"])
         
         length = config["Simulation Box"]["Box Length"]
         
         length_units = config["Simulation Box"]["Length Units"]
-        
-        
+  
         ### Black Hole Stuff
         
         particles = config["Matter Particles"]['Condition']
@@ -812,8 +737,7 @@ def LoadConfig(loc):
         m_position_unit = config["Matter Particles"]['Position Units']
         
         m_velocity_unit = config["Matter Particles"]['Velocity Units']
-        
-        
+      
         ### ULDM Stuff
         
         solitons = config["ULDM Solitons"]['Condition']
@@ -825,23 +749,16 @@ def LoadConfig(loc):
         s_position_unit = config["ULDM Solitons"]['Position Units']
         
         s_velocity_unit = config["ULDM Solitons"]['Velocity Units']
-        
-        
+   
         ### ULDM Modifier
         
         Uniform = config["Uniform Field Override"]["Flag"]
         density_unit = config["Uniform Field Override"]["Density Unit"]
         Density = config["Uniform Field Override"]["Density Value"]
-        
-        
-        
-        ### Field Averaging
-        
-        NCV = np.array(config["Field-averaging Probes"]["Probe Array"])
-        NCW = np.array(config["Field-averaging Probes"]["Probe Weights"])
-        
+        UVel = config["Uniform Field Override"]['Uniform Velocity']
+      
          
-        return  NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_path, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, embeds, Uniform,Density, density_unit,a, NCV,NCW
+        return  NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_path, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, embeds, Uniform,Density, density_unit,a, B, UVel
 
 
 
