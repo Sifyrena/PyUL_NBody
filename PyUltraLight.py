@@ -328,7 +328,7 @@ def calculate_energies(
 ######################### FUNCTION TO INITIALIZE SOLITONS AND EVOLVE
 
 def evolve(central_mass, num_threads, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options,
-           save_path, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons, start_time,UVelocity = [0,1,0], Uniform = True, Density = 10):
+           save_path, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons, start_time,UVelocity = [0,2,0], Uniform = True, Density = 100):
     print ('Initialising...')
 
 

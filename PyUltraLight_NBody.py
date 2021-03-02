@@ -1,6 +1,6 @@
 Version   = str('PyULN') # Handle used in console.
 D_version = str('Integrator Build 2021 03 02') # Detailed Version
-S_version = 15
+S_version = 15.2
  # Short Version
 
 import time
@@ -693,7 +693,12 @@ def calculate_energiesF(save_options, resol,
                     mPhi = ne.evaluate("mPhi-a*mT/(a*distarrayTM+exp(-a*distarrayTM))") # Potential Due to Test Mass
                     
                 if b > 0:
-                    mPhi = mPhi*np.heaviside(b-distarrayTM,1)
+                    
+                    Steep = 60
+
+                    mPhi = mPhi * 1/2*(np.tanh((b-distarrayTM)*Steep)+1)
+                    
+                    # mPhi = mPhi * np.heaviside(b-distarrayTM,1)
                 
             phisp = ne.evaluate("phisp+mPhi") # Adding the same amount back.
             
@@ -702,7 +707,8 @@ def calculate_energiesF(save_options, resol,
                 
             else:
                 egyComp = egyarr-BoxAvg
-                
+
+            
             egyarr = ne.evaluate('real(mPhi*egyComp)') # Interaction in particle potential!.
             
             egpcmlist.append(Vcell * np.sum(egyarr))
@@ -1831,7 +1837,10 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
             phisp = ne.evaluate("phisp-a*TMmass/(a*distarrayTM+exp(-a*distarrayTM))")
         
         if b > 0:
-            phisp = phisp*np.heaviside(b-distarrayTM,1)
+            
+            Steep = 60
+
+            phisp = phisp * 1/2*(np.tanh((b-distarrayTM)*Steep)+1)
         
         MI = int(MI + 1)
         
@@ -1997,7 +2006,7 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
                 phisp = ne.evaluate("phisp-a*mT/(a*distarrayTM+exp(-a*distarrayTM))")
                 
             if b > 0:
-                phisp = phisp*np.heaviside(b-distarrayTM,1)
+                phisp = phisp * 1/2*(np.tanh((b-distarrayTM)*Steep)+1)
             
         #phisp = ne.evaluate("phisp-a*cmass/(a*distarray+exp(-a*distarray))")
 
@@ -2037,16 +2046,16 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
                 np.save(os.path.join(os.path.expanduser(loc), "Outputs/ekandqlist.npy"), ekandqlist)
                 np.save(os.path.join(os.path.expanduser(loc), "Outputs/masseslist.npy"), mtotlist)
 
-        # New Feature for Dyn Drag
-        #if (NumTM == 1) and Uniform:
-        #    
-        #    Vcurrent = TMState[3:6]
-        #    
-        #    if np.dot(Vinitial,Vcurrent)<=0:
-        #        
-        #        print(f"\n{Version} Runtime: Black Hole Has Stopped. Halting Integration.")
-        #        
-        #        break
+        ## New Feature for Dyn Drag
+        if (NumTM == 1) and Uniform:
+            
+            Vcurrent = TMState[3:6]
+            
+            if np.dot(Vinitial,Vcurrent)<=0:
+                
+                print(f"\n{Version} Runtime: Black Hole Has Stopped. Halting Integration.")
+                
+                break
         ################################################################################
         # UPDATE INFORMATION FOR PROGRESS BAR
 
