@@ -1,6 +1,6 @@
 Version   = str('ULHelper') # Handle used in console.
 D_version = str('Helper Build 2021 03 02') # Detailed Version
-S_version = 9 # Short Version
+S_version = 10 # Short Version
 
 print(D_version)
 
@@ -497,25 +497,34 @@ def Load_Config(configpath):
         print(config)
 
         
-def EmbedParticle(particles,embeds):
-    
+def EmbedParticle(particles,embeds,solitons):
+
     EI = 0
     
-    for Mollusk in embeds:
-        
-        print(f"ULHelper: Calculating and loading the mass of embedded particle #{EI}.")
-        
+    embedsIter = embeds.copy()
+    
+    for Mollusk in embedsIter:
+ 
         Mass = Mollusk[0]*Mollusk[3]
         
-        Pearl = [Mass,Mollusk[1],Mollusk[2]]
+        if Mollusk[3] > 0:
+            print(f"ULHelper: Calculating and loading the mass of embedded particle #{EI}.")
+            Pearl = [Mass,Mollusk[1],Mollusk[2]]
+
+            if not (Pearl in particles):
+                particles.append(Pearl)
         
-        if not (Pearl in particles):
-            particles.append(Pearl)
+        else:
+            print(f"ULHelper: Embed structure #{EI} contains no black hole. Moving to regular solitons list.")
             
+            Shell = [Mollusk[0],Mollusk[1],Mollusk[2],Mollusk[4]]
+            solitons.append(Shell)
+            embeds.remove(Mollusk)
+
         EI += 1
         
     
-    return particles
+    return particles, solitons, embeds
         
        
 def GenFromTime():
@@ -594,6 +603,8 @@ def GenerateConfig(NS, central_mass, length, length_units, resol, duration, dura
     })
 
 
+    particles, solitons, embeds = EmbedParticle(particles,embeds,solitons)
+    
     Conf_data['ULDM Solitons'] = ({
     'Condition': solitons,
     'Embedded': embeds,
@@ -601,9 +612,6 @@ def GenerateConfig(NS, central_mass, length, length_units, resol, duration, dura
     'Position Units': s_position_unit,
     'Velocity Units': s_velocity_unit
     })
-
-
-    particles = EmbedParticle(particles,embeds)
 
     Conf_data['Matter Particles'] = ({
     'Condition': particles,

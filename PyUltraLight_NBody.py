@@ -1,6 +1,6 @@
 Version   = str('PyULN') # Handle used in console.
 D_version = str('Integrator Build 2021 03 02') # Detailed Version
-S_version = 15.2
+S_version = 16.1
  # Short Version
 
 import time
@@ -29,6 +29,50 @@ try:
 except ModuleNotFoundError:
     def LW(a):
         return -0.15859433956303937
+
+    
+####################### AUX. FUNCTION TO GENERATE PROGRESS BAR
+
+def prog_bar(iteration_number, progress, tinterval,status = ''):
+    size = 20
+    
+    if status == 'SP':
+        status = ' SP '
+        
+    if status == 'FT':
+        status = ' FT '
+        
+    if status == 'TM1':
+        status = ' RK '
+        
+    if status == 'TM2':
+        status = ' EN '
+        
+    if status == 'IO':
+        status = ' IO '
+       
+    
+    ETAStamp = time.time() + (iteration_number - progress)*tinterval
+    
+    ETA = datetime.fromtimestamp(ETAStamp).strftime("%d/%m/%Y, %H:%M:%S")
+    
+    progress = float(progress) / float(iteration_number)
+    
+    if progress >= 1.:
+        progress, status = 1, ""
+    
+    block = int(round(size * progress))
+    
+    text = "\r[{}] {:.0f}% {}{}{} ({}{:.2f}s)".format(
+        "▓▓" * block + "░░" * (size - block), round(progress * 100, 0),
+        status, 'Expected Finish Time: ',ETA,'Prev. Step: ',tinterval)
+    
+
+    print(f'{text}', end="",flush='true')
+
+    
+####################### AUX. FUNCTION For Debugging
+
 
 num_threads = multiprocessing.cpu_count()
 
@@ -243,26 +287,7 @@ def isolatedPotential(rho, green, l, fft_X, ifft_X, fft_plane, ifft_plane):
     rho = (l**2) * rhopad[:-n, :, :] #potential has units of length^2 in this system
     return(rho.real)
 
-####################### AUX. FUNCTION TO GENERATE PROGRESS BAR
 
-def prog_bar(iteration_number, progress, tinterval):
-    size = 20
-    status = ""
-    
-    ETAStamp = time.time() + (iteration_number - progress)*tinterval
-    
-    ETA = datetime.fromtimestamp(ETAStamp).strftime("%d/%m/%Y, %H:%M:%S")
-    
-    progress = float(progress) / float(iteration_number)
-    if progress >= 1.:
-        progress, status = 1, "\r\n"
-    block = int(round(size * progress))
-    text = "\r[{}] {:.0f}% {}{}{} ({}{:.2f}s)".format(
-        "龘" * block + "口" * (size - block), round(progress * 100, 0),
-        status, 'Expected Finish Time: ',ETA,'Prev. Step: ',tinterval)
-    
-    sys.stdout.write(text)
-    sys.stdout.flush()
 
 ####################### CONVERTING PARAMS TO CODE UNITS
 
@@ -457,7 +482,7 @@ def initsoliton(funct, xarray, yarray, zarray, position, alpha, f, delta_x):
 
 
 def save_grid(
-        rho, psi, resol, TMState, phisp,
+        rho, psi, resol, TMState, phiSP,
         save_options,
         npy, npz, hdf5,
         loc, ix, its_per_save, GradientLog
@@ -569,44 +594,44 @@ def save_grid(
                 file_name = "Outputs/Field3D_#{0}.npy".format(save_num)
                 np.save(
                     os.path.join(os.path.expanduser(loc), file_name),
-                    phisp
+                    phiSP
                 )
             if (npz):
                 file_name = "Outputs/Field3D_#{0}.npz".format(save_num)
                 np.savez(
                     os.path.join(os.path.expanduser(loc), file_name),
-                    phisp
+                    phiSP
                 )
             if (hdf5):
                 file_name = "Outputs/Field3D_#{0}.hdf5".format(save_num)
                 file_name = os.path.join(os.path.expanduser(loc), file_name)
                 f = h5py.File(file_name, 'w')
-                dset = f.create_dataset("init", data=phisp)
+                dset = f.create_dataset("init", data=phiSP)
                 f.close()
                 
                 
                 
         if (save_options[7]):
             
-            phisp_slice = phisp[:,:,int(resol/2)] # z = 0
+            phiSP_slice = phiSP[:,:,int(resol/2)] # z = 0
             
             if (npy):
                 file_name = "Outputs/Field2D_#{0}.npy".format(save_num)
                 np.save(
                     os.path.join(os.path.expanduser(loc), file_name),
-                    phisp_slice
+                    phiSP_slice
                 )
             if (npz):
                 file_name = "Outputs/Field2D_#{0}.npz".format(save_num)
                 np.savez(
                     os.path.join(os.path.expanduser(loc), file_name),
-                    phisp_slice
+                    phiSP_slice
                 )
             if (hdf5):
                 file_name = "Outputs/Field2D_#{0}.hdf5".format(save_num)
                 file_name = os.path.join(os.path.expanduser(loc), file_name)
                 f = h5py.File(file_name, 'w')
-                dset = f.create_dataset("init", data=phisp_slice)
+                dset = f.create_dataset("init", data=phiSP_slice)
                 f.close()
                 
                 
@@ -657,83 +682,44 @@ def save_grid(
                 f.close()
 
 
-# CALCULATE_ENERGIES, FW
+# CALCULATE_ENERGIES, NEW VERSION IN 2.16
+            
+def calculate_energies(rho, Vcell, phiSP,phiTM, psi, karray2, fft_psi, ifft_funct, Density,Uniform, egpcmlist, egpsilist, ekandqlist, egylist, mtotlist):
 
-def calculate_energiesF(save_options, resol,
-        psi, cmass, TMState, masslist, Vcell, phisp, karray2, funct,
-        fft_psi, ifft_funct,
-        egpcmlist, egpsilist, ekandqlist, egylist, mtotlist,xarray, yarray, zarray, a,b, Density, Uniform):
+    if Uniform:
+        BoxAvg = Density
+    else:
+        BoxAvg = np.mean(rho) # Mean Value in Box
+
+    # Gravitational potential energy density associated with the point masses potential
+
+    ETM = ne.evaluate('real(phiTM*(rho-BoxAvg))') # Interaction in particle potential!.
+    ETMtot = Vcell * np.sum(ETM)
+    egpcmlist.append(ETMtot) # TM Saved.
+
+    # Gravitational potential energy density of self-interaction of the condensate
+    ESI = ne.evaluate('real(0.5*(phiSP)*rho)') # New!
+    ESItot = Vcell * np.sum(ESI)
+    egpsilist.append(ESItot)
     
-    if (save_options[3]):
-        
-            
-            mPhi = pyfftw.zeros_aligned((resol, resol, resol), dtype='float64')
-            
-            egyarr = ne.evaluate('real((abs(psi))**2)') # Density tensor
-            
-            BoxAvg = np.mean(egyarr) # Mean Value in Box
+    Etot = ETMtot + ESItot # Begin gathering!
 
-            # Gravitational potential energy density associated with the point masses potential
+    # TODO: Does this reuse the memory of funct?  That is the
+    # intention, but likely isn't what is happening
+    funct = fft_psi(psi)
+    funct = ne.evaluate('-karray2*funct')
+    funct = ifft_funct(funct)
+    EKQ = ne.evaluate('real(-0.5*conj(psi)*funct)')
+    EKQtot = Vcell * np.sum(EKQ)
+    
+    ekandqlist.append(EKQtot)
+    Etot += EKQtot
 
-            for MI in range(len(masslist)):
-        
-                State = TMState[int(MI*6):int(MI*6+5)]
-            
-                TMx = State[0]
-                TMy = State[1]
-                TMz = State[2]
-                
-                mT = masslist[MI]
-            
-                distarrayTM = ne.evaluate("((xarray-TMx)**2+(yarray-TMy)**2+(zarray-TMz)**2)**0.5") # Radial coordinates
-                
-                if a == 0:
-                    mPhi = ne.evaluate("mPhi-mT/(distarrayTM)")
-                else:
-                    mPhi = ne.evaluate("mPhi-a*mT/(a*distarrayTM+exp(-a*distarrayTM))") # Potential Due to Test Mass
-                    
-                if b > 0:
-                    
-                    Steep = 60
+    egylist.append(Etot)
 
-                    mPhi = mPhi * 1/2*(np.tanh((b-distarrayTM)*Steep)+1)
-                    
-                    # mPhi = mPhi * np.heaviside(b-distarrayTM,1)
-                
-            phisp = ne.evaluate("phisp+mPhi") # Adding the same amount back.
-            
-            if Uniform:
-                egyComp = egyarr-Density
-                
-            else:
-                egyComp = egyarr-BoxAvg
-
-            
-            egyarr = ne.evaluate('real(mPhi*egyComp)') # Interaction in particle potential!.
-            
-            egpcmlist.append(Vcell * np.sum(egyarr))
-            
-            tot = Vcell * np.sum(egyarr)
-
-            # Gravitational potential energy density of self-interaction of the condensate
-            egyarr = ne.evaluate('real(0.5*(phisp)*real((abs(psi))**2))') # Restored
-            egpsilist.append(Vcell * np.sum(egyarr))
-            tot = tot + Vcell * np.sum(egyarr)
-
-            # TODO: Does this reuse the memory of funct?  That is the
-            # intention, but likely isn't what is happening
-            funct = fft_psi(psi)
-            funct = ne.evaluate('-karray2*funct')
-            funct = ifft_funct(funct)
-            egyarr = ne.evaluate('real(-0.5*conj(psi)*funct)')
-            ekandqlist.append(Vcell * np.sum(egyarr))
-            tot = tot + Vcell * np.sum(egyarr)
-
-            egylist.append(tot)
-
-            egyarr = ne.evaluate('real((abs(psi))**2)')
-            mtotlist.append(Vcell * np.sum(egyarr))
-
+    # Total mass compared to background.
+    Mtot = np.sum(rho)*Vcell
+    mtotlist.append(Mtot)
 
 
 ### Toroid or something
@@ -774,7 +760,7 @@ def InterpolateLocal(RRem,Input):
     else:
         return Input[1]*RRem + Input[0]*(1-RRem)
 
-def FWNBody3(t,TMState,masslist,phisp,a,gridlength,resol):
+def FWNBody3(t,TMState,masslist,phiSP,a,gridlength,resol):
 
     GridDist = gridlength/resol
     
@@ -800,15 +786,18 @@ def FWNBody3(t,TMState,masslist,phisp,a,gridlength,resol):
         RPtZ = int(RPt[2])
 
         if (RPtX == 0) or (RPtY == 0) or (RPtZ == 0):
-            print('Plan A')
+            print('Warning: Particle reached boundary on the -ve side. Halting.')
+            
+            break
             TAr = np.zeros([4,4,4])
 
         elif (RPtX >= resol-4) or (RPtY >= resol-4) or (RPtZ >= resol-4):
-            print('Plan B')
+            print('Warning: Particle reached boundary on the +ve side. Halting.')
             TAr = np.zeros([4,4,4])
+            break
 
         else:    
-            TAr = phisp[RPtX-1:RPtX+3,RPtY-1:RPtY+3,RPtZ-1:RPtZ+3] # 64 Local Grids
+            TAr = phiSP[RPtX-1:RPtX+3,RPtY-1:RPtY+3,RPtZ-1:RPtZ+3] # 64 Local Grids
 
         GArX = (TAr[2:4,1:3,1:3] - TAr[0:2,1:3,1:3])/(2*GridDist) # 8
 
@@ -876,13 +865,13 @@ def FWNBody3(t,TMState,masslist,phisp,a,gridlength,resol):
                 
     return dTMdt, GradientLog
 
-def FWNBodyAdvance3(TMState,h,masslist,phisp,a,gridlength,resol,NS):
+def FWNBodyAdvance3(TMState,h,masslist,phiSP,a,gridlength,resol,NS):
         #
         if NS == 0:
             NS = 1
         if NS == 1:
  
-            Step, GradientLog = FWNBody3(0,TMState,masslist,phisp,a,gridlength,resol)
+            Step, GradientLog = FWNBody3(0,TMState,masslist,phiSP,a,gridlength,resol)
             
             TMStateOut = TMState + Step*h
             
@@ -895,10 +884,10 @@ def FWNBodyAdvance3(TMState,h,masslist,phisp,a,gridlength,resol,NS):
             H = h/NRK
             
             for RKI in range(NRK):
-                TMK1, Trash = FWNBody3(0,TMState,masslist,phisp,a,gridlength,resol)
-                TMK2, Trash = FWNBody3(0,TMState + H/2*TMK1,masslist,phisp,a,gridlength,resol)
-                TMK3, Trash = FWNBody3(0,TMState + H/2*TMK2,masslist,phisp,a,gridlength,resol)
-                TMK4, GradientLog = FWNBody3(0,TMState + H*TMK3,masslist,phisp,a,gridlength,resol)
+                TMK1, Trash = FWNBody3(0,TMState,masslist,phiSP,a,gridlength,resol)
+                TMK2, Trash = FWNBody3(0,TMState + H/2*TMK1,masslist,phiSP,a,gridlength,resol)
+                TMK3, Trash = FWNBody3(0,TMState + H/2*TMK2,masslist,phiSP,a,gridlength,resol)
+                TMK4, GradientLog = FWNBody3(0,TMState + H*TMK3,masslist,phiSP,a,gridlength,resol)
                 TMState = TMState + H/6*(TMK1+2*TMK2+2*TMK3+TMK4)
                 
             TMStateOut = TMState
@@ -1567,8 +1556,6 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
         gridvec, gridvec, gridvec,
         sparse=True, indexing='ij')
     
-    distarray = ne.evaluate("(xarray**2+yarray**2+zarray**2)**0.5") # Radial coordinates
-    
     WN = 2*np.pi*np.fft.fftfreq(resol, gridlength/(resol)) # 2pi Pre-multiplied
     
     Kx,Ky,Kz = np.meshgrid(WN,WN,WN,sparse=True, indexing='ij',)
@@ -1732,9 +1719,10 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
     fft_plane = pyfftw.builders.fftn(bigplane, axes=(0, 1), threads=num_threads)
     ifft_plane = pyfftw.builders.ifftn(bigplane, axes=(0, 1), threads=num_threads)
     
-    phisp = pyfftw.zeros_aligned((resol, resol, resol), dtype='float64')
+    phiSP = pyfftw.zeros_aligned((resol, resol, resol), dtype='float64')
+    phiTM = pyfftw.zeros_aligned((resol, resol, resol), dtype='float64') # New, separate treatment.
 
-    fft_phi = pyfftw.builders.fftn(phisp, axes=(0, 1, 2), threads=num_threads)
+    fft_phi = pyfftw.builders.fftn(phiSP, axes=(0, 1, 2), threads=num_threads)
 
     ##########################################################################################
     # SETUP K-SPACE FOR RHO (REAL)
@@ -1760,32 +1748,16 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
     
     irfft_phi = pyfftw.builders.irfftn(phik, axes=(0, 1, 2), threads=num_threads)
     
-    if EdgeClear:
-        
-        Cutoff = int(4)
-        
-        #x
-        psi[ 0:Cutoff,:,:] = 0
-        psi[-Cutoff:,:,:] = 0
-
-        #y
-        psi[:, 0:Cutoff,:] = 0
-        psi[:,-Cutoff:,:] = 0
-
-        #z
-        psi[:,:, 0:Cutoff] = 0
-        psi[:,:,-Cutoff:] = 0
-        
+    #if EdgeClear:
+        # Coming soon.
 
     ##########################################################################################
     # COMPUTE INTIAL VALUE OF POTENTIAL
 
     if Uniform:
         print(f"{Version} SP: Poisson Equation Solveed Using FFT.")
-        phisp = irfft_phi(phik)
+        phiSP = irfft_phi(phik)
     else:
-        
-        
         try:
             green = np.load(f'./Green Functions/G{resol}.npy')
             print(f"{Version} SP: Using pre-computed Green function for simulation region.")
@@ -1797,7 +1769,7 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
             np.save(f'./Green Functions/G{resol}.npy',green)
             
         #green = makeEvenArray(green)
-        phisp = IP_jit(rho, green, gridlength, fft_X, ifft_X, fft_plane, ifft_plane)
+        phiSP = IP_jit(rho, green, gridlength, fft_X, ifft_X, fft_plane, ifft_plane)
         
     ##########################################################################################
     # FW NBody
@@ -1832,15 +1804,15 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
         TMState.append([TMx,TMy,TMz,Vx,Vy,Vz])
         
         if a == 0:
-            phisp = ne.evaluate("phisp-TMmass/(distarrayTM)")
+            phiTM = ne.evaluate("phiTM-TMmass/(distarrayTM)")
         else:
-            phisp = ne.evaluate("phisp-a*TMmass/(a*distarrayTM+exp(-a*distarrayTM))")
+            phiTM = ne.evaluate("phiTM-a*TMmass/(a*distarrayTM+exp(-a*distarrayTM))")
         
         if b > 0:
             
             Steep = 60
 
-            phisp = phisp * 1/2*(np.tanh((b-distarrayTM)*Steep)+1)
+            phiTM = phiTM * 1/2*(np.tanh((b-distarrayTM)*Steep)+1)
         
         MI = int(MI + 1)
         
@@ -1849,6 +1821,8 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
     masslist = np.array(masslist)
     TMState = np.array(TMState)
     TMState = TMState.flatten(order='C')
+    
+    phi = phiSP + phiTM
     
     if NumTM == 1:
         Vinitial = TMState[3:6]
@@ -1869,10 +1843,7 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
         ekandqlist = []
         mtotlist = []
 
-        calculate_energiesF(save_options, resol,
-        psi, cmass, TMState, masslist, Vcell, phisp, karray2, funct,
-        fft_psi, ifft_funct,
-        egpcmlist, egpsilist, ekandqlist, egylist, mtotlist,xarray, yarray, zarray, a,b, Density, Uniform )
+        calculate_energies(rho, Vcell, phiSP,phiTM, psi, karray2, fft_psi, ifft_funct, Density,Uniform, egpcmlist, egpsilist, ekandqlist, egylist, mtotlist)
     
     GradientLog = np.zeros(NumTM*3)
     
@@ -1900,13 +1871,10 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
     
     ##########################################################################################
     # PRE-LOOP SAVE I.E. INITIAL CONFIG
-    save_grid(
-            rho, psi, resol, TMState, phisp,
+    save_grid(rho, psi, resol, TMState, phiSP,
             save_options,
             npy, npz, hdf5,
-            loc, -1, 1, GradientLog,
-    )
-               
+            loc, -1, 1, GradientLog)
     
     tBegin = time.time()
     
@@ -1931,16 +1899,17 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
         print("WARNING: Detected significant overlap between solitons in I.V.")
     print('\n')
     tinit = time.time()
-  
+    tint = 0
     for ix in range(actual_num_steps):
-        
+        prog_bar(actual_num_steps, ix + 1, tint,'SP')
         if HaSt == 1:
-            psi = ne.evaluate("exp(-1j*0.5*h*phisp)*psi")
+            psi = ne.evaluate("exp(-1j*0.5*h*phi)*psi")
             HaSt = 0
 
         else:
-            psi = ne.evaluate("exp(-1j*h*phisp)*psi")
-               
+            psi = ne.evaluate("exp(-1j*h*phi)*psi")
+        
+        prog_bar(actual_num_steps, ix + 1, tint,'FT')
         funct = fft_psi(psi)
         funct = ne.evaluate("funct*exp(-1j*0.5*h*karray2)")
         
@@ -1956,38 +1925,17 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
 
         # New Green Function Methods
         if Uniform:
-            phisp = irfft_phi(phik)
+            phiSP = irfft_phi(phik)
         else:
-            phisp = IP_jit(rho, green, gridlength, fft_X, ifft_X, fft_plane, ifft_plane)
-        
-            
-        # FW STEP MAGIC HAPPENS HERE
+            phiSP = IP_jit(rho, green, gridlength, fft_X, ifft_X, fft_plane, ifft_plane)
 
-        if Method == 2:
-            TMState, GradientLog = FloaterAdvanceR(TMState,h,masslist,NS,FieldFT,masslist,gridlength,resol,Kx,Ky,Kz,a, HWHM,NCV,NCW)
-        
-        elif Method == 1:
-            
-            phiGrad = np.gradient(phisp, gridvec,gridvec,gridvec, edge_order = 2)
-            
-            phiGradX = phiGrad[0]
-            
-            GxI = RPI([gridvec,gridvec,gridvec],phiGradX,method = 'linear',bounds_error = False, fill_value = 0)
-            
-            phiGradY = phiGrad[1]
-            
-            GyI = RPI([gridvec,gridvec,gridvec],phiGradY,method = 'linear',bounds_error = False, fill_value = 0)
-            
-            phiGradZ = phiGrad[2]
-            
-            GzI = RPI([gridvec,gridvec,gridvec],phiGradZ,method = 'linear',bounds_error = False, fill_value = 0)
-            
-            if NS!=2:
-                TMState, GradientLog = FloaterAdvanceI(TMState,h,masslist,NS,GxI,GyI,GzI,a,HWHM,NCV,NCW)   
-                
-        elif Method == 3:
-            
-            TMState, GradientLog = FWNBodyAdvance3(TMState,h,masslist,phisp,a,gridlength,resol,NS)
+        # FW STEP MAGIC HAPPENS HERE
+        prog_bar(actual_num_steps, ix + 1, tint,'TM1')
+
+        TMState, GradientLog = FWNBodyAdvance3(TMState,h,masslist,phiSP,a,gridlength,resol,NS)
+ 
+        prog_bar(actual_num_steps, ix + 1, tint,'TM2')
+        phiTM = pyfftw.zeros_aligned((resol, resol, resol), dtype='float64') # Reset!
     
         for MI in range(NumTM):
         
@@ -2001,28 +1949,27 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
             
             distarrayTM = ne.evaluate("((xarray-TMx)**2+(yarray-TMy)**2+(zarray-TMz)**2)**0.5") # Radial coordinates
             if a == 0:
-                phisp = ne.evaluate("phisp-mT/(distarrayTM)")
+                phiTM = ne.evaluate("phiTM-mT/(distarrayTM)")
             else:
-                phisp = ne.evaluate("phisp-a*mT/(a*distarrayTM+exp(-a*distarrayTM))")
+                phiTM = ne.evaluate("phiTM-a*mT/(a*distarrayTM+exp(-a*distarrayTM))")
                 
             if b > 0:
-                phisp = phisp * 1/2*(np.tanh((b-distarrayTM)*Steep)+1)
+                phiTM = phiTM * 1/2*(np.tanh((b-distarrayTM)*Steep)+1)
             
-        #phisp = ne.evaluate("phisp-a*cmass/(a*distarray+exp(-a*distarray))")
-
-
+        phi = phiSP + phiTM
+        
+        prog_bar(actual_num_steps, ix + 1, tint,'SP')
         #Next if statement ensures that an extra half step is performed at each save point
         if (((ix + 1) % its_per_save) == 0) and HaSt == 0:
-            psi = ne.evaluate("exp(-1j*0.5*h*phisp)*psi")
+            psi = ne.evaluate("exp(-1j*0.5*h*phi)*psi")
             rho = ne.evaluate("real(abs(psi)**2)")
             HaSt = 1
 
+            prog_bar(actual_num_steps, ix + 1, tint,'IO')
             #Next block calculates the energies at each save, not at each timestep.
             if (save_options[3]):
-                calculate_energiesF(save_options, resol, psi, 
-                                    cmass, TMState, masslist, Vcell, phisp, karray2, funct,
-                                    fft_psi, ifft_funct, egpcmlist, egpsilist, ekandqlist,
-                                    egylist, mtotlist,xarray, yarray, zarray, a,b, Density, Uniform)
+                
+                calculate_energies(rho, Vcell, phiSP,phiTM, psi, karray2, fft_psi, ifft_funct, Density,Uniform, egpcmlist, egpsilist, ekandqlist, egylist, mtotlist)
 
            
         ################################################################################
@@ -2030,7 +1977,7 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
         if ((ix + 1) % its_per_save) == 0:
                         
             save_grid(
-                    rho, psi, resol, TMState, phisp,
+                    rho, psi, resol, TMState, phiSP,
                     save_options,
                     npy, npz, hdf5,
                     loc, ix, its_per_save, GradientLog,
@@ -2061,7 +2008,7 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
 
         tint = time.time() - tinit
         tinit = time.time()
-        prog_bar(actual_num_steps, ix + 1, tint)
+        prog_bar(actual_num_steps, ix + 1, tint,'')
 
     ################################################################################
     # LOOP ENDS
