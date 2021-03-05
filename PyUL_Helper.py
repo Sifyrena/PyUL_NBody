@@ -507,19 +507,26 @@ def EmbedParticle(particles,embeds,solitons):
  
         Mass = Mollusk[0]*Mollusk[3]
         
-        if Mollusk[3] > 0:
-            print(f"ULHelper: Calculating and loading the mass of embedded particle #{EI}.")
-            Pearl = [Mass,Mollusk[1],Mollusk[2]]
 
-            if not (Pearl in particles):
-                particles.append(Pearl)
+        print(f"ULHelper: Calculating and loading the mass of embedded particle #{EI}.")
+        Pearl = [Mass,Mollusk[1],Mollusk[2]]
+
+        if not (Pearl in particles):
+            particles.append(Pearl)
         
-        else:
+        if Mollusk[3] == 0:
             print(f"ULHelper: Embed structure #{EI} contains no black hole. Moving to regular solitons list.")
             
             Shell = [Mollusk[0],Mollusk[1],Mollusk[2],Mollusk[4]]
             solitons.append(Shell)
             embeds.remove(Mollusk)
+            
+        if Mollusk[3] == 1:
+            print(f"ULHelper: Embed structure #{EI} contains no ULDM. Removing from list.")
+            
+            Shell = [Mollusk[0],Mollusk[1],Mollusk[2],Mollusk[4]]
+            embeds.remove(Mollusk)
+            
 
         EI += 1
         
@@ -800,11 +807,14 @@ def NBodyEnergy(particles,EndNum,TMdata,m_mass_unit,a):
                 Index1 = int(Mass1*6)
                 Position1 = Data[Index1:Index1+2]
                 m1 = ML[Mass1]
-
+                if m1 == 0:
+                    continue
                 for Mass2 in range (Mass1+1,NBo,1):
                     Index2 = int(Mass2*6)
                     Position2 = Data[Index2:Index2+2]
                     m2 = ML[Mass2]
+                    if m2 == 0
+                        continue
 
                     r = Position1 - Position2
 
@@ -823,3 +833,40 @@ def NBodyEnergy(particles,EndNum,TMdata,m_mass_unit,a):
             
             
     return NBo, KS, PS
+
+# Point Mass Kepler
+def FOSR(m,r):
+    return np.sqrt(m/r)
+
+# NFW Kepler
+def FOSU(m,r):
+    return np.sqrt(m/r)
+
+def PopulateWithStars(embeds,particles,rIn = 0.4,rOut = 1.2,InBias = 0, NStars = 10, MassMax = 1e-5):
+
+    for Halo in embeds:
+              
+        GPos = np.array(Halo[1])
+        GVel = np.array(Halo[2])
+        GMass = Halo[0]
+
+        
+        for i in range(NStars):
+
+            r = (np.random.random()*(rOut-rIn) + rIn)
+
+            theta = 2*np.pi*np.random.random()
+            
+            v = FOSR(GMass,r)
+
+            Position = np.array([r*np.cos(theta),r*np.sin(theta),0]) + GPos
+            Velocity = np.array([v*np.sin(theta),-v*np.cos(theta),0]) + GVel
+
+            Mass = MaxStarMass*np.random.random()
+
+            particles.append([Mass,Position.tolist(),Velocity.tolist()])
+
+    return particles
+
+
+

@@ -34,7 +34,7 @@ except ModuleNotFoundError:
 ####################### AUX. FUNCTION TO GENERATE PROGRESS BAR
 
 def prog_bar(iteration_number, progress, tinterval,status = ''):
-    size = 20
+    size = 25
     
     if status == 'SP':
         status = ' SP '
@@ -64,7 +64,7 @@ def prog_bar(iteration_number, progress, tinterval,status = ''):
     block = int(round(size * progress))
     
     text = "\r[{}] {:.0f}% {}{}{} ({}{:.2f}s)".format(
-        "▓▓" * block + "░░" * (size - block), round(progress * 100, 0),
+        "▓" * block + " " * (size - block), round(progress * 100, 0),
         status, 'Expected Finish Time: ',ETA,'Prev. Step: ',tinterval)
     
 
@@ -786,13 +786,13 @@ def FWNBody3(t,TMState,masslist,phiSP,a,gridlength,resol):
         RPtZ = int(RPt[2])
 
         if (RPtX == 0) or (RPtY == 0) or (RPtZ == 0):
-            print('Warning: Particle reached boundary on the -ve side. Halting.')
-            
-            break
+            raise RuntimeError (f'Particle #{i} reached boundary on the -ve side. Halting.')
             TAr = np.zeros([4,4,4])
+            break
+            
 
         elif (RPtX >= resol-4) or (RPtY >= resol-4) or (RPtZ >= resol-4):
-            print('Warning: Particle reached boundary on the +ve side. Halting.')
+            raise RuntimeError (f'Particle #{i} reached boundary on the +ve side. Halting.')
             TAr = np.zeros([4,4,4])
             break
 
@@ -832,7 +832,7 @@ def FWNBody3(t,TMState,masslist,phiSP,a,gridlength,resol):
     
         for ii in range(len(masslist)):
             
-            if ii != i:
+            if (ii != i) and (masslist[ii] != 0):
                 
                 IndX = int(6*ii)
                 
@@ -1460,7 +1460,7 @@ PC_jit = numba.jit(planeConvolve)
     
     
 ######################### New Version With Built-in I/O Management
-def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, DumpInit = False):
+def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, DumpInit = False, IsoP = False, DynDrag = False):
     
     clear_output()
     print(f"=========={Version}: {D_version}==========")
@@ -1754,10 +1754,7 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
     ##########################################################################################
     # COMPUTE INTIAL VALUE OF POTENTIAL
 
-    if Uniform:
-        print(f"{Version} SP: Poisson Equation Solveed Using FFT.")
-        phiSP = irfft_phi(phik)
-    else:
+    if IsoP:
         try:
             green = np.load(f'./Green Functions/G{resol}.npy')
             print(f"{Version} SP: Using pre-computed Green function for simulation region.")
@@ -1770,6 +1767,10 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
             
         #green = makeEvenArray(green)
         phiSP = IP_jit(rho, green, gridlength, fft_X, ifft_X, fft_plane, ifft_plane)
+        
+    else:
+        print(f"{Version} SP: Poisson Equation Solveed Using FFT.")
+        phiSP = irfft_phi(phik)
         
     ##########################################################################################
     # FW NBody
@@ -1798,21 +1799,26 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
         Vx = velocity[0]
         Vy = velocity[1]
         Vz = velocity[2]
-                       
-        distarrayTM = ne.evaluate("((xarray-TMx)**2+(yarray-TMy)**2+(zarray-TMz)**2)**0.5") # Radial coordinates
         
         TMState.append([TMx,TMy,TMz,Vx,Vy,Vz])
         
-        if a == 0:
-            phiTM = ne.evaluate("phiTM-TMmass/(distarrayTM)")
-        else:
-            phiTM = ne.evaluate("phiTM-a*TMmass/(a*distarrayTM+exp(-a*distarrayTM))")
-        
-        if b > 0:
-            
-            Steep = 60
+        if TMmass != 0:
+                       
+            distarrayTM = ne.evaluate("((xarray-TMx)**2+(yarray-TMy)**2+(zarray-TMz)**2)**0.5") # Radial coordinates
 
-            phiTM = phiTM * 1/2*(np.tanh((b-distarrayTM)*Steep)+1)
+
+
+            if a == 0:
+                phiTM = ne.evaluate("phiTM-TMmass/(distarrayTM)")
+            else:
+                phiTM = ne.evaluate("phiTM-a*TMmass/(a*distarrayTM+exp(-a*distarrayTM))")
+
+            if b > 0:
+
+                Steep = 60
+
+                phiTM = phiTM * 1/2*(np.tanh((b-distarrayTM)*Steep)+1)
+        
         
         MI = int(MI + 1)
         
@@ -1868,7 +1874,14 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
         print(f'{Version} IO: Successfully initiated Wavefunction and NBody Initial Conditions.')
 
 
-    
+    if DynDrag:
+        
+        # It has to be in 'y'
+        
+        DragLog = []
+        
+        
+        
     ##########################################################################################
     # PRE-LOOP SAVE I.E. INITIAL CONFIG
     save_grid(rho, psi, resol, TMState, phiSP,
@@ -1901,7 +1914,7 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
     tinit = time.time()
     tint = 0
     for ix in range(actual_num_steps):
-        prog_bar(actual_num_steps, ix + 1, tint,'SP')
+        prog_bar(actual_num_steps, ix + 1, tint,' FT ')
         if HaSt == 1:
             psi = ne.evaluate("exp(-1j*0.5*h*phi)*psi")
             HaSt = 0
@@ -1909,7 +1922,7 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
         else:
             psi = ne.evaluate("exp(-1j*h*phi)*psi")
         
-        prog_bar(actual_num_steps, ix + 1, tint,'FT')
+        
         funct = fft_psi(psi)
         funct = ne.evaluate("funct*exp(-1j*0.5*h*karray2)")
         
@@ -1922,19 +1935,19 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
         
         phik[0, 0, 0] = 0
 
-
+        prog_bar(actual_num_steps, ix + 1, tint,' SP ')
         # New Green Function Methods
-        if Uniform:
+        if not IsoP:
             phiSP = irfft_phi(phik)
         else:
             phiSP = IP_jit(rho, green, gridlength, fft_X, ifft_X, fft_plane, ifft_plane)
 
         # FW STEP MAGIC HAPPENS HERE
-        prog_bar(actual_num_steps, ix + 1, tint,'TM1')
+        prog_bar(actual_num_steps, ix + 1, tint,'TM1 ')
 
         TMState, GradientLog = FWNBodyAdvance3(TMState,h,masslist,phiSP,a,gridlength,resol,NS)
  
-        prog_bar(actual_num_steps, ix + 1, tint,'TM2')
+        prog_bar(actual_num_steps, ix + 1, tint,'TM2 ')
         phiTM = pyfftw.zeros_aligned((resol, resol, resol), dtype='float64') # Reset!
     
         for MI in range(NumTM):
@@ -1947,25 +1960,27 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
 
             mT = masslist[MI]
             
-            distarrayTM = ne.evaluate("((xarray-TMx)**2+(yarray-TMy)**2+(zarray-TMz)**2)**0.5") # Radial coordinates
-            if a == 0:
-                phiTM = ne.evaluate("phiTM-mT/(distarrayTM)")
-            else:
-                phiTM = ne.evaluate("phiTM-a*mT/(a*distarrayTM+exp(-a*distarrayTM))")
-                
-            if b > 0:
-                phiTM = phiTM * 1/2*(np.tanh((b-distarrayTM)*Steep)+1)
+            if mT != 0:
+            
+                distarrayTM = ne.evaluate("((xarray-TMx)**2+(yarray-TMy)**2+(zarray-TMz)**2)**0.5") # Radial coordinates
+                if a == 0:
+                    phiTM = ne.evaluate("phiTM-mT/(distarrayTM)")
+                else:
+                    phiTM = ne.evaluate("phiTM-a*mT/(a*distarrayTM+exp(-a*distarrayTM))")
+
+                if b > 0:
+                    phiTM = phiTM * 1/2*(np.tanh((b-distarrayTM)*Steep)+1)
             
         phi = phiSP + phiTM
         
-        prog_bar(actual_num_steps, ix + 1, tint,'SP')
+        prog_bar(actual_num_steps, ix + 1, tint,' FT ')
         #Next if statement ensures that an extra half step is performed at each save point
         if (((ix + 1) % its_per_save) == 0) and HaSt == 0:
             psi = ne.evaluate("exp(-1j*0.5*h*phi)*psi")
             rho = ne.evaluate("real(abs(psi)**2)")
             HaSt = 1
 
-            prog_bar(actual_num_steps, ix + 1, tint,'IO')
+            prog_bar(actual_num_steps, ix + 1, tint,' IO ')
             #Next block calculates the energies at each save, not at each timestep.
             if (save_options[3]):
                 
@@ -1992,8 +2007,24 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
                 np.save(os.path.join(os.path.expanduser(loc), "Outputs/egpsilist.npy"), egpsilist)
                 np.save(os.path.join(os.path.expanduser(loc), "Outputs/ekandqlist.npy"), ekandqlist)
                 np.save(os.path.join(os.path.expanduser(loc), "Outputs/masseslist.npy"), mtotlist)
-
-        ## New Feature for Dyn Drag
+        
+        ## New Features for Dyn Drag
+        
+        if DynDrag:
+            prog_bar(actual_num_steps, ix + 1, tint,' DD ')
+        
+            phiGrad = np.gradient(phiSP, gridvec,gridvec,gridvec, edge_order = 2)
+           
+            phiGradY = phiGrad[1]
+            
+            DragMat = ne.evaluate('rho*phiGradY')
+            
+            Drag = -1*np.sum(DragMat)
+           
+            DragLog.append(Drag)
+            np.save(os.path.join(os.path.expanduser(loc), "Outputs/DragCoeff.npy"), DragLog)
+            
+        
         if (NumTM == 1) and Uniform:
             
             Vcurrent = TMState[3:6]
