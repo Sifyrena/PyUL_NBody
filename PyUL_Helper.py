@@ -813,7 +813,7 @@ def NBodyEnergy(particles,EndNum,TMdata,m_mass_unit,a):
                     Index2 = int(Mass2*6)
                     Position2 = Data[Index2:Index2+2]
                     m2 = ML[Mass2]
-                    if m2 == 0
+                    if m2 == 0:
                         continue
 
                     r = Position1 - Position2
@@ -862,11 +862,12 @@ def PopulateWithStars(embeds,particles,rIn = 0.4,rOut = 1.2,InBias = 0, NStars =
             Position = np.array([r*np.cos(theta),r*np.sin(theta),0]) + GPos
             Velocity = np.array([v*np.sin(theta),-v*np.cos(theta),0]) + GVel
 
-            Mass = MaxStarMass*np.random.random()
+            Mass = MassMax*np.random.random()
 
             particles.append([Mass,Position.tolist(),Velocity.tolist()])
 
     return particles
 
 
-
+def AreYouThere():
+    print('yes')

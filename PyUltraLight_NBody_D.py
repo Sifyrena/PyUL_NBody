@@ -1,6 +1,6 @@
-Version   = str('PyULN') # Handle used in console.
-D_version = str('Integrator Build 2021 03 02') # Detailed Version
-S_version = 16.1
+Version   = str('PyUL2') # Handle used in console.
+D_version = str('Integrator Build 2021 03 05') # Detailed Version
+S_version = 16.6
  # Short Version
 
 import time
@@ -785,31 +785,36 @@ def FWNBody3(t,TMState,masslist,phiSP,a,gridlength,resol):
         RPtY = int(RPt[1])
         RPtZ = int(RPt[2])
 
-        if (RPtX == 0) or (RPtY == 0) or (RPtZ == 0):
-            raise RuntimeError (f'Particle #{i} reached boundary on the -ve side. Halting.')
+        if (RPtX <= 0) or (RPtY <= 0) or (RPtZ <= 0):
+            #raise RuntimeError (f'Particle #{i} reached boundary on the -ve side. Halting.')
             TAr = np.zeros([4,4,4])
-            break
-            
+
+            GradientX = 0
+            GradientY = 0
+            GradientZ = 0        
 
         elif (RPtX >= resol-4) or (RPtY >= resol-4) or (RPtZ >= resol-4):
-            raise RuntimeError (f'Particle #{i} reached boundary on the +ve side. Halting.')
+            #raise RuntimeError (f'Particle #{i} reached boundary on the +ve side. Halting.')
             TAr = np.zeros([4,4,4])
-            break
+            
+            GradientX = 0
+            GradientY = 0
+            GradientZ = 0
 
         else:    
             TAr = phiSP[RPtX-1:RPtX+3,RPtY-1:RPtY+3,RPtZ-1:RPtZ+3] # 64 Local Grids
 
-        GArX = (TAr[2:4,1:3,1:3] - TAr[0:2,1:3,1:3])/(2*GridDist) # 8
+            GArX = (TAr[2:4,1:3,1:3] - TAr[0:2,1:3,1:3])/(2*GridDist) # 8
 
-        GArY = (TAr[1:3,2:4,1:3] - TAr[1:3,0:2,1:3])/(2*GridDist) # 8
+            GArY = (TAr[1:3,2:4,1:3] - TAr[1:3,0:2,1:3])/(2*GridDist) # 8
 
-        GArZ = (TAr[1:3,1:3,2:4] - TAr[1:3,1:3,2:4])/(2*GridDist) # 8
+            GArZ = (TAr[1:3,1:3,2:4] - TAr[1:3,1:3,2:4])/(2*GridDist) # 8
 
-        GradientX = InterpolateLocal(RRem,GArX)
+            GradientX = InterpolateLocal(RRem,GArX)
 
-        GradientY = InterpolateLocal(RRem,GArY)
+            GradientY = InterpolateLocal(RRem,GArY)
 
-        GradientZ = InterpolateLocal(RRem,GArZ)
+            GradientZ = InterpolateLocal(RRem,GArZ)
 
         #XDOT
         dTMdt[Ind]   =  TMState[Ind+3]
@@ -1460,7 +1465,7 @@ PC_jit = numba.jit(planeConvolve)
     
     
 ######################### New Version With Built-in I/O Management
-def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, DumpInit = False, IsoP = False, DynDrag = False):
+def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, DumpInit = False, IsoP = False, DynDrag = False, UseDispSponge = True):
     
     clear_output()
     print(f"=========={Version}: {D_version}==========")
@@ -1602,11 +1607,7 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
         velz = UVelocity[2]
         psi = ne.evaluate("exp(1j*(velx*xarray + vely*yarray + velz*zarray))*psi")
         psi = ne.evaluate("psi + funct")
-        
-        
-        
-        
-        
+                
     else:
         # Load Embedded Objects First
         
@@ -1639,8 +1640,6 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
 
             position = convert(np.array(emb[1]), s_position_unit, 'l')
             velocity = convert(np.array(emb[2]), s_velocity_unit, 'v')
-            
-            
 
             # Note that alpha and beta parameters are computed when the initial_f.npy soliton profile file is generated.
 
@@ -1893,15 +1892,57 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
     
     tBeginDisp = datetime.fromtimestamp(tBegin).strftime("%d/%m/%Y, %H:%M:%S")
     
-    print("======================================================")
+
     
-    print(f"{Version} Runtime: Simulation Started at {tBeginDisp}.")
-    ##########################################################################################
-    # PRE-LOOP ENERGY CALCULATION
+    
+    ########################################################################################## 
+    # Chapel Code From Yale Cosmology.
+    #proc applySpongeDispersive(psi : [?Dom], dt : real) {
+    #    const V0 = SpongeV0;
+    #    const (nx, ny, nz) = Dom.shape;
+    #    const rn = nx/2;
+    #    const rp = SpongeFracRadius*rn;
+    #    const rs = (rn + rp)*0.5;
+    #    const invdelta = 1.0/(rn - rp);
+    #    const c0 = 2.0 - tanh(rs*invdelta);
+    #    forall (ii,jj,kk) in Dom {
+    #      // Compute r 
+    #      const r2 = (ii - nx/2.0)**2 + (jj - ny/2.0)**2 + (kk - nz/2.0)**2;
+    #      const r = sqrt(r2);
+    #      // Update psi
+    #      if (r > rp) {
+    #        const vpot = 0.5*V0*(c0 + tanh((r-rs)*invdelta));
+    #        psi.localAccess[ii,jj,kk] *= exp(-vpot*dt);
+    #      }
+    #    }
+    #  }
+    
+    if UseDispSponge:
+        
+        SpongeRatio = 1/2
+        # This works in grid units in Chapel. We make it work in Code Units.
+        rn = 1/2*gridlength
+        rp = SpongeRatio*rn
+        rs = (rn+rp)/2
+        invdelta = 1/(rn-rp)
+        c0 = 2 - np.tanh(rs*invdelta)
+        V0 = 0.6
+        distarray = ne.evaluate("((xarray)**2+(yarray)**2+(zarray)**2)**0.5") # Radial coordinates for system
+        #Vpot without the potential
+        PreMult = 0.5*V0*(c0+np.tanh((distarray-rs)*invdelta))
+        
+        #High Performance Mask
+        PreMult[distarray<=rp] = 0
+        
+        print(f'{Version} IO: Dispersive Sponge Condition Pre Multiplier Ready.')
+
+        
 
     ##########################################################################################
     # LOOP NOW BEGINS
-
+    print("======================================================")
+    print(f"{Version} Runtime: Simulation Started at {tBeginDisp}.")
+    
     HaSt = 1  # 1 for a half step 0 for a full step
 
     tenth = float(save_number/10) #This parameter is used if energy outputs are saved while code is running.
@@ -1913,6 +1954,9 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
     print('\n')
     tinit = time.time()
     tint = 0
+    
+    
+    #####################################################################################LOOP
     for ix in range(actual_num_steps):
         prog_bar(actual_num_steps, ix + 1, tint,' FT ')
         if HaSt == 1:
@@ -1927,6 +1971,13 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
         funct = ne.evaluate("funct*exp(-1j*0.5*h*karray2)")
         
         psi = ifft_funct(funct)
+
+        
+
+        if UseDispSponge:
+            prog_bar(actual_num_steps, ix + 1, tint,' DS ')
+            psi *= np.exp(-PreMult*h)
+                    
         rho = ne.evaluate("real(abs(psi)**2)")
         
         phik = rfft_rho(rho)
@@ -1934,6 +1985,7 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
         phik = ne.evaluate("-4*pi*(phik)/rkarray2")
         
         phik[0, 0, 0] = 0
+
 
         prog_bar(actual_num_steps, ix + 1, tint,' SP ')
         # New Green Function Methods
