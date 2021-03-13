@@ -869,5 +869,36 @@ def PopulateWithStars(embeds,particles,rIn = 0.4,rOut = 1.2,InBias = 0, NStars =
     return particles
 
 
-def AreYouThere():
-    print('yes')
+def PopulateBHWithStars(particles,rIn = 0.4, rOut = 1.2,InBias = 0, NStars = 10, MassMax = 1e-5):
+
+    IterParticles = particles.copy()
+    
+    for BH in IterParticles:
+       
+              
+        GPos = np.array(BH[1])
+        GVel = np.array(BH[2])
+        GMass = BH[0]
+        
+        if GMass == 0:
+            continue
+        else:
+
+            for i in range(NStars):
+
+                r = (np.random.random()*(rOut-rIn) + rIn)
+
+                theta = 2*np.pi*np.random.random()
+
+                v = FOSR(GMass,r)
+
+                Position = np.array([r*np.cos(theta),r*np.sin(theta),0]) + GPos
+                Velocity = np.array([v*np.sin(theta),-v*np.cos(theta),0]) + GVel
+
+                Mass = MassMax*np.random.random()
+
+                particles.append([Mass,Position.tolist(),Velocity.tolist()])
+
+    return particles
+
+

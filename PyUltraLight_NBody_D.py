@@ -1,6 +1,6 @@
 Version   = str('PyUL2') # Handle used in console.
-D_version = str('Integrator Build 2021 03 05') # Detailed Version
-S_version = 16.6
+D_version = str('Integrator Build 2021 03 13') # Detailed Version
+S_version = 16.7
  # Short Version
 
 import time
@@ -113,6 +113,10 @@ length_unit = (8 * pi * hbar ** 2 / (3 * axion_mass ** 2 * H_0 ** 2 * omega_m0))
 
 mass_unit = (3 * H_0 ** 2 * omega_m0 / (8 * pi)) ** 0.25 * hbar ** 1.5 / (axion_mass ** 1.5 * G)
 
+energy_unit = mass_unit * length_unit ** 2 / (time_unit**2)
+
+
+# Borrowed from PyULH 10
 def LoadConfig(loc):
         
         configfile = loc + '/config.txt'
@@ -747,7 +751,56 @@ def FWrap(TMx, TMy, TMz, gridlength):
         TMz = TMz + gridlength
         
     return TMx,TMy,TMz
+
+
+### For Immediate Interpolation of Field Energy
+
+def QuickInterpolate(Field,gridlength,resol,position):
+        #Code Position
+        RNum = (position*1/gridlength+1/2)*resol
+        
+        RPt = np.floor(RNum)
+        RRem = RNum - RPt
+        
+        RX = RRem[0]
+        RY = RRem[1]
+        RZ = RRem[2]
+        
+        Interp = 0
+        
+        # Need special treatment if any of these is zero or close to resol!
+        RPtX = int(RPt[0])
+        RPtY = int(RPt[1])
+        RPtZ = int(RPt[2])
+
+        if (RPtX >= resol-1) or (RPtY >= resol-1) or (RPtZ >= resol-1):
+            #raise RuntimeError (f'Particle #{i} reached boundary on the +ve side. Halting.')
+            return Interp
             
+        if (RPtX <= 0) or (RPtY <= 0) or (RPtZ <= 0):
+            #raise RuntimeError (f'Particle #{i} reached boundary on the +ve side. Halting.')
+            return Interp
+
+        else:
+        
+            SPC = Field[RPtX:RPtX+2,RPtY:RPtY+2,RPtZ:RPtZ+2]
+            # Ugly
+            Interp += (1-RX)*(1-RY)*(1-RZ)*SPC[0,0,0] # Lower Left Near
+            Interp += (1-RX)*(1-RY)*(  RZ)*SPC[0,0,1]
+            Interp += (1-RX)*(  RY)*(1-RZ)*SPC[0,1,0]
+            Interp += (1-RX)*(  RY)*(  RZ)*SPC[0,1,1]
+            Interp += (  RX)*(1-RY)*(1-RZ)*SPC[1,0,0]
+            Interp += (  RX)*(1-RY)*(  RZ)*SPC[1,0,1]
+            Interp += (  RX)*(  RY)*(1-RZ)*SPC[1,1,0]
+            Interp += (  RX)*(  RY)*(  RZ)*SPC[1,1,1] # Upper Right Far
+
+            return Interp
+            
+            
+
+
+
+### Method 3 Interpolation Algorithm
 
 def InterpolateLocal(RRem,Input):
         
@@ -1147,8 +1200,20 @@ def BHRatioTester(TargetRatio,Iter,Tol,BHMassGMin,BHMassGMax,Smoo):
         
         if IterInt == Iter:
             
-            raise ValueError("First loop of shooting algorithm failed to converge to given ratio.")
-            return 0,0
+            print("Shooting algorithm failed to converge to given ratio. Type 'Y' to add ten more trials, 'B' to raise the upper bound, or '' to cancel.")
+            
+            Response = str(input())
+            
+            if Response == 'Y':
+                Iter += 10
+                
+            elif Response == 'B':
+                Iter += 10
+                BHMassHi += 0.5
+                
+            elif Response == '':
+                raise ValueError('Failed to converge to specified mass ratio.')
+                return 0,0
         s = 0    
 
 def SolitonProfile(BHMass,s,Smoo,Production):
@@ -1486,6 +1551,10 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
 
     # Embedded particles are Pre-compiled into the list.
     
+    if not Uniform:
+        Density = 0
+        UVel = [0,0,0]
+    
     if a>=1e6:
         print(f"{Version} IO: Smoothing factor has been reset!")
         a = 0
@@ -1747,8 +1816,22 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
     
     irfft_phi = pyfftw.builders.irfftn(phik, axes=(0, 1, 2), threads=num_threads)
     
-    #if EdgeClear:
-        # Coming soon.
+    if EdgeClear:
+        
+        Cutoff = int(resol/8)
+        
+        #x
+        psi[ 0:Cutoff,:,:] = np.sqrt(Density) + 0j
+        psi[-Cutoff:,:,:] = np.sqrt(Density) + 0j
+
+        #y
+        psi[:, 0:Cutoff,:] = np.sqrt(Density) + 0j
+        psi[:,-Cutoff:,:] = np.sqrt(Density) + 0j
+
+        #z
+        psi[:,:, 0:Cutoff] = np.sqrt(Density) + 0j
+        psi[:,:,-Cutoff:] = np.sqrt(Density) + 0j
+        
 
     ##########################################################################################
     # COMPUTE INTIAL VALUE OF POTENTIAL
@@ -1774,7 +1857,7 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
     ##########################################################################################
     # FW NBody
     MI = 0
-    
+    EGPCM = 0
     for particle in particles:
                
         TMmass = convert(particle[0], m_mass_unit, 'm')
@@ -1819,6 +1902,8 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
                 phiTM = phiTM * 1/2*(np.tanh((b-distarrayTM)*Steep)+1)
         
         
+        if (save_options[3]):
+            EGPCM += TMmass*QuickInterpolate(phiSP,gridlength,resol,np.array([TMx,TMy,TMz]))
         MI = int(MI + 1)
         
         # FW
@@ -1847,8 +1932,11 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
         egpsilist = []
         ekandqlist = []
         mtotlist = []
+        egpcmMlist = [EGPCM]
 
         calculate_energies(rho, Vcell, phiSP,phiTM, psi, karray2, fft_psi, ifft_funct, Density,Uniform, egpcmlist, egpsilist, ekandqlist, egylist, mtotlist)
+    
+
     
     GradientLog = np.zeros(NumTM*3)
     
@@ -1897,26 +1985,7 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
     
     ########################################################################################## 
     # Chapel Code From Yale Cosmology.
-    #proc applySpongeDispersive(psi : [?Dom], dt : real) {
-    #    const V0 = SpongeV0;
-    #    const (nx, ny, nz) = Dom.shape;
-    #    const rn = nx/2;
-    #    const rp = SpongeFracRadius*rn;
-    #    const rs = (rn + rp)*0.5;
-    #    const invdelta = 1.0/(rn - rp);
-    #    const c0 = 2.0 - tanh(rs*invdelta);
-    #    forall (ii,jj,kk) in Dom {
-    #      // Compute r 
-    #      const r2 = (ii - nx/2.0)**2 + (jj - ny/2.0)**2 + (kk - nz/2.0)**2;
-    #      const r = sqrt(r2);
-    #      // Update psi
-    #      if (r > rp) {
-    #        const vpot = 0.5*V0*(c0 + tanh((r-rs)*invdelta));
-    #        psi.localAccess[ii,jj,kk] *= exp(-vpot*dt);
-    #      }
-    #    }
-    #  }
-    
+  
     if UseDispSponge:
         
         SpongeRatio = 1/2
@@ -1955,7 +2024,7 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
     tinit = time.time()
     tint = 0
     
-    
+    EGPCM = 0
     #####################################################################################LOOP
     for ix in range(actual_num_steps):
         prog_bar(actual_num_steps, ix + 1, tint,' FT ')
@@ -2001,7 +2070,7 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
  
         prog_bar(actual_num_steps, ix + 1, tint,'TM2 ')
         phiTM = pyfftw.zeros_aligned((resol, resol, resol), dtype='float64') # Reset!
-    
+            
         for MI in range(NumTM):
         
             State = TMState[int(MI*6):int(MI*6+5)]
@@ -2023,7 +2092,12 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
                 if b > 0:
                     phiTM = phiTM * 1/2*(np.tanh((b-distarrayTM)*Steep)+1)
             
+                if (save_options[3]) and ((ix + 1) % its_per_save) == 0:
+                    EGPCM += mT*QuickInterpolate(phiSP,gridlength,resol,np.array([TMx,TMy,TMz]))
+            
         phi = phiSP + phiTM
+        
+        
         
         prog_bar(actual_num_steps, ix + 1, tint,' FT ')
         #Next if statement ensures that an extra half step is performed at each save point
@@ -2042,6 +2116,9 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
         ################################################################################
         # SAVE DESIRED OUTPUTS
         if ((ix + 1) % its_per_save) == 0:
+        
+            egpcmMlist.append(EGPCM)
+            EGPCM = 0
                         
             save_grid(
                     rho, psi, resol, TMState, phiSP,
@@ -2056,6 +2133,7 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
             if (save_options[3]):  
                 np.save(os.path.join(os.path.expanduser(loc), "Outputs/egylist.npy"), egylist)
                 np.save(os.path.join(os.path.expanduser(loc), "Outputs/egpcmlist.npy"), egpcmlist)
+                np.save(os.path.join(os.path.expanduser(loc), "Outputs/egpcmMlist.npy"), egpcmMlist)
                 np.save(os.path.join(os.path.expanduser(loc), "Outputs/egpsilist.npy"), egpsilist)
                 np.save(os.path.join(os.path.expanduser(loc), "Outputs/ekandqlist.npy"), ekandqlist)
                 np.save(os.path.join(os.path.expanduser(loc), "Outputs/masseslist.npy"), mtotlist)
