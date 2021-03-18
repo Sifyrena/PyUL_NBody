@@ -1,5 +1,5 @@
 Version   = str('PyUL2') # Handle used in console.
-D_version = str('Integrator Build 2021 03 16') # Detailed Version
+D_version = str('Integrator Build 2021 03 17 With Experimental Features') # Detailed Version
 S_version = 17
  # Short Version
 
@@ -830,13 +830,13 @@ def FWNBody3(t,TMState,masslist,phiSP,a,gridlength,resol):
         
         GradientLocal = -1*np.array([[GradientX],[GradientY],[GradientZ]])
 
-        #Initialized Against ULDM Field
+        #Initialized Against Nothing
         #XDDOT
-        dTMdt[Ind+3] =  GradientLocal[0]
+        dTMdt[Ind+3] =  0
         #YDDOT
-        dTMdt[Ind+4] =  GradientLocal[1]
+        dTMdt[Ind+4] =  0
         #ZDDOT
-        dTMdt[Ind+5] =  GradientLocal[2]
+        dTMdt[Ind+5] =  0
     
         for ii in range(len(masslist)):
             
@@ -873,6 +873,7 @@ def FWNBody3(t,TMState,masslist,phiSP,a,gridlength,resol):
 
                 
     return dTMdt, GradientLog
+
 
 def FWNBodyAdvance3(TMState,h,masslist,phiSP,a,gridlength,resol,NS):
         #
@@ -1553,19 +1554,22 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
 
     gridlength = convert(length, length_units, 'l')
     
-    b = gridlength * B/2
+    b = gridlength * B / 2
 
     t = convert(duration, duration_units, 't')
 
     t0 = convert(start_time, duration_units, 't')
-    
-    cmass = convert(central_mass, m_mass_unit, 'm')
 
     Density = convert(Density,density_unit,'d')
     
     Vcell = (gridlength / float(resol)) ** 3
     
+    if B != 0:
+        print(f'{Version} NBody: Newtonian Gravitational Field Cut-off: Domain Size / {1/B:3f}')
+    
     ne.set_num_threads(num_threads)
+    
+    cmass = 0
     
     ##########################################################################################
     # Backwards Compatibility
@@ -1847,8 +1851,6 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
                        
             distarrayTM = ne.evaluate("((xarray-TMx)**2+(yarray-TMy)**2+(zarray-TMz)**2)**0.5") # Radial coordinates
 
-
-
             if a == 0:
                 phiTM = ne.evaluate("phiTM-TMmass/(distarrayTM)")
             else:
@@ -1857,6 +1859,7 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
             if b > 0:
 
 
+                
                 phiTM = phiTM * 1/2*(np.tanh((b-distarrayTM)*Steep)+1)
         
         
@@ -2052,8 +2055,10 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
             
                 if (save_options[3]) and ((ix + 1) % its_per_save) == 0:
                     EGPCM += mT*QuickInterpolate(phiSP,gridlength,resol,np.array([TMx,TMy,TMz]))
-            
-        phi = phiSP + phiTM
+         
+        
+        phiSP *= 0
+        phi = phiTM # Turned off the other side.
         
         
         
@@ -2338,7 +2343,7 @@ def Load_Data(save_path,ts,save_options,save_number):
     return EndNum, data,  TMdata, phidata,    graddata, phasedata
 
 
-def SmoothingReport(a,resol,clength,B = 0):
+def SmoothingReport(a,resol,clength):
     import matplotlib.pyplot as plt
 
     GridLenFS = clength/(resol)
@@ -2347,7 +2352,7 @@ def SmoothingReport(a,resol,clength,B = 0):
     COMid = resol/2*np.sqrt(2)
     COMax = resol/2*np.sqrt(3)
    
-    fig_grav = plt.figure(figsize=(12, 12))
+    fig_grav = plt.figure(figsize=(6, 6))
 
     # Diagnostics For Field Smoothing
     
@@ -2410,7 +2415,7 @@ def SmoothingReport(a,resol,clength,B = 0):
     print("  Radius outside which the fields are practically indistinguishable (Grids): %.0f" % rS)
     print("  Modified Potential HWHM (Grids): %.0f" % rQ)
     
-
+    
 def CutoffReport(B,resol,clength,Steep = 100):
     import matplotlib.pyplot as plt
     fig_b = plt.figure(figsize=(7, 5))
@@ -2430,6 +2435,7 @@ def CutoffReport(B,resol,clength,Steep = 100):
     ax1.set_ylim([0,1.1])
     
     
+
 def Load_Config(configpath):
     
     with open(configpath, 'r') as configfile:
@@ -2731,7 +2737,6 @@ def NBodyEnergy(MassListSI,TMDataSI,EndNum,a=0,length_unit = ''): # kg, m, m/s, 
                 Vx = Data[int(Index1+3)]
                 Vy = Data[int(Index1+4)]
                 Vz = Data[int(Index1+5)]
-            
                 KS[i] += 1/2*MassListSI[Mass1]*(Vx**2+Vy**2+Vz**2) # J
 
             for Mass2 in range (Mass1+1,NBo,1):
@@ -2750,6 +2755,8 @@ def NBodyEnergy(MassListSI,TMDataSI,EndNum,a=0,length_unit = ''): # kg, m, m/s, 
                 else:
                     PS[i] += - 1*G*m1*m2*ADim/(ADim*rN+np.exp(-ADim*rN))
 
+
+            
             
     return NBo, KS, PS
 
@@ -2846,7 +2853,6 @@ def SolitonSizeEstimate(mass,length,resol,mass_unit = '',length_unit = ''): # On
             funct[index] = np.nan
 
     plt.plot(rarray,funct,'k--')
-    
     plt.xlim([0,code_length/2])
     plt.ylim([0,funct[0]*1.1])
     plt.xlabel('Code Radial Coordinate')
