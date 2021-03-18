@@ -13,7 +13,7 @@ import numba
 import pyfftw
 import h5py
 import os
-import scipy.fft
+
 import multiprocessing
 import json
 
@@ -170,8 +170,8 @@ def makeDCTGreen(n):
     arr[0,0,0] = 3*np.log(np.sqrt(3) + 2) - np.pi/2 #calculated in https://arxiv.org/pdf/chem-ph/9508002.pdf
     # no normalization below matches un-normalization in Mathematica
     
-    with scipy.fft.set_workers(num_threads):
-        green =  scipy.fft.dctn(arr, type = 1, norm = None)
+
+    green =  np.fft.dctn(arr, type = 1, norm = None)
     return(green)
     
 #makeEvenArray
