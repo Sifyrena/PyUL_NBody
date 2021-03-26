@@ -1,6 +1,6 @@
 Version   = str('PyUL2') # Handle used in console.
-D_version = str('Integrator Build 2021 03 17 With Experimental Features') # Detailed Version
-S_version = 17
+D_version = str('Integrator Build 2021 03 26, Using Plummer for NBody') # Detailed Version
+S_version = 18
  # Short Version
 
 import time
@@ -672,8 +672,8 @@ def calculate_energies(rho, Vcell, phiSP,phiTM, psi, karray2, fft_psi, ifft_func
 
 
 ### Toroid or something
-            
-def FWrap(TMx, TMy, TMz, gridlength):
+        
+def Wrap(TMx, TMy, TMz, gridlength):
     
     if TMx > gridlength/2:
         TMx = TMx - gridlength
@@ -697,6 +697,7 @@ def FWrap(TMx, TMy, TMz, gridlength):
         
     return TMx,TMy,TMz
 
+FWrap = Wrap
 
 ### For Immediate Interpolation of Field Energy
 
@@ -731,7 +732,7 @@ def QuickInterpolate(Field,gridlength,resol,position):
         else:
         
             SPC = Field[RPtX:RPtX+2,RPtY:RPtY+2,RPtZ:RPtZ+2]
-            # Ugly
+            # This monstrosity is actually faster than tensor algebra...
             Interp += (1-RX)*(1-RY)*(1-RZ)*SPC[0,0,0] # Lower Left Near
             Interp += (1-RX)*(1-RY)*(  RZ)*SPC[0,0,1]
             Interp += (1-RX)*(  RY)*(1-RZ)*SPC[0,1,0]
@@ -756,7 +757,7 @@ def InterpolateLocal(RRem,Input):
     else:
         return Input[1]*RRem + Input[0]*(1-RRem)
 
-def FWNBody3(t,TMState,masslist,phiSP,a,gridlength,resol):
+def FWNBody(t,TMState,masslist,phiSP,a,gridlength,resol):
 
     GridDist = gridlength/resol
     
@@ -802,16 +803,13 @@ def FWNBody3(t,TMState,masslist,phiSP,a,gridlength,resol):
 
         else:   
             
-            
             TAr = phiSP[RPtX-1:RPtX+3,RPtY-1:RPtY+3,RPtZ-1:RPtZ+3] # 64 Local Grids
-            
 
             GArX = (TAr[2:4,1:3,1:3] - TAr[0:2,1:3,1:3])/(2*GridDist) # 8
 
             GArY = (TAr[1:3,2:4,1:3] - TAr[1:3,0:2,1:3])/(2*GridDist) # 8
 
             GArZ = (TAr[1:3,1:3,2:4] - TAr[1:3,1:3,2:4])/(2*GridDist) # 8
-
 
             GradientX = InterpolateLocal(RRem,GArX)
 
@@ -830,7 +828,122 @@ def FWNBody3(t,TMState,masslist,phiSP,a,gridlength,resol):
         
         GradientLocal = -1*np.array([[GradientX],[GradientY],[GradientZ]])
 
-        #Initialized Against Nothing
+        #Initialized Against ULDM Field
+        #XDDOT
+        dTMdt[Ind+3] =  GradientLocal[0]
+        #YDDOT
+        dTMdt[Ind+4] =  GradientLocal[1]
+        #ZDDOT
+        dTMdt[Ind+5] =  GradientLocal[2]
+    
+        for ii in range(len(masslist)):
+            
+            if (ii != i) and (masslist[ii] != 0):
+                
+                IndX = int(6*ii)
+                
+                # print(ii)
+                
+                poslocalX = np.array([TMState[IndX],TMState[IndX+1],TMState[IndX+2]])
+                
+                rV = poslocalX - poslocal
+                
+                rVL = np.linalg.norm(rV) # Positive
+                
+                
+                if a == 0:
+                    F = 1/(rVL)**3
+                else:                    
+                    F = -(a**3)/(a**2*rVL**2+1)**(1.5) # The First Plummer
+                
+                # Differentiated within Note 000.0F
+                
+                #XDDOT with Gravity
+                dTMdt[Ind+3] = dTMdt[Ind+3] - masslist[ii]*F*rV[0]
+                #YDDOT
+                dTMdt[Ind+4] = dTMdt[Ind+4] - masslist[ii]*F*rV[1]
+                #ZDDOT
+                dTMdt[Ind+5] = dTMdt[Ind+5] - masslist[ii]*F*rV[2]
+        
+        GradientLog[IndD  ] = GradientLocal[0]
+        GradientLog[IndD+1] = GradientLocal[1]
+        GradientLog[IndD+2] = GradientLocal[2]
+
+    return dTMdt, GradientLog
+
+
+def FWNBody_NI(t,TMState,masslist,phiSP,a,gridlength,resol):
+
+    GridDist = gridlength/resol
+    
+    dTMdt = 0*TMState
+    GradientLog = np.zeros(len(masslist)*3)
+    
+    for i in range(len(masslist)):
+        
+        #0,6,12,18,...
+        Ind = int(6*i)
+        IndD = int(3*i)
+           
+        #X,Y,Z
+        poslocal = TMState[Ind:Ind+3]
+
+        RNum = (poslocal*1/gridlength+1/2)*resol
+
+        RPt = np.floor(RNum)
+        RRem = RNum - RPt
+        
+        # Need special treatment if any of these is zero or close to resol!
+
+        
+        RPtX = int(RPt[0])
+        RPtY = int(RPt[1])
+        RPtZ = int(RPt[2])
+
+        if (RPtX <= 0) or (RPtY <= 0) or (RPtZ <= 0):
+            #raise RuntimeError (f'Particle #{i} reached boundary on the -ve side. Halting.')
+            TAr = np.zeros([4,4,4])
+
+            GradientX = 0
+            GradientY = 0
+            GradientZ = 0        
+
+        elif (RPtX >= resol-4) or (RPtY >= resol-4) or (RPtZ >= resol-4):
+            #raise RuntimeError (f'Particle #{i} reached boundary on the +ve side. Halting.')
+            TAr = np.zeros([4,4,4])
+            
+            GradientX = 0
+            GradientY = 0
+            GradientZ = 0
+
+        else:   
+            
+            TAr = phiSP[RPtX-1:RPtX+3,RPtY-1:RPtY+3,RPtZ-1:RPtZ+3] # 64 Local Grids
+
+            GArX = (TAr[2:4,1:3,1:3] - TAr[0:2,1:3,1:3])/(2*GridDist) # 8
+
+            GArY = (TAr[1:3,2:4,1:3] - TAr[1:3,0:2,1:3])/(2*GridDist) # 8
+
+            GArZ = (TAr[1:3,1:3,2:4] - TAr[1:3,1:3,2:4])/(2*GridDist) # 8
+
+            GradientX = InterpolateLocal(RRem,GArX)
+
+            GradientY = InterpolateLocal(RRem,GArY)
+
+            GradientZ = InterpolateLocal(RRem,GArZ)
+
+        #XDOT
+        dTMdt[Ind]   =  TMState[Ind+3]
+        #YDOT
+        dTMdt[Ind+1] =  TMState[Ind+4]
+        #ZDOT
+        dTMdt[Ind+2] =  TMState[Ind+5]
+        
+        #x,y,z
+        
+        GradientLocal = -1*np.array([[GradientX],[GradientY],[GradientZ]])
+
+        #Initialized Against THE VOID
         #XDDOT
         dTMdt[Ind+3] =  0
         #YDDOT
@@ -850,35 +963,43 @@ def FWNBody3(t,TMState,masslist,phiSP,a,gridlength,resol):
                 
                 rV = poslocalX - poslocal
                 
-                rVL = np.linalg.norm(rV)
-                
-                
-                if a ==0:
-                    rSmooth = 1/(rVL)**3
-                else:
-                    rSmooth = (-a**2+a**2*np.exp(-a*rVL))/(rVL*(a*rVL+np.exp(-a*rVL))**2)
+                rVL = np.linalg.norm(rV) # Positive
+
+                if a == 0:
+                    F = 1/(rVL)**3
+                else:                    
+                    F = -(a**3)/(a**2*rVL**2+1)**(1.5) # The First Plummer
                 
                 # Differentiated within Note 000.0F
                 
-                #XDDOT with Gravity
-                dTMdt[Ind+3] = dTMdt[Ind+3] - masslist[ii]*rSmooth*rV[0]
+                #XDDOT
+                dTMdt[Ind+3] = dTMdt[Ind+3] - masslist[ii]*F*rV[0]
                 #YDDOT
-                dTMdt[Ind+4] = dTMdt[Ind+4] - masslist[ii]*rSmooth*rV[1]
+                dTMdt[Ind+4] = dTMdt[Ind+4] - masslist[ii]*F*rV[1]
                 #ZDDOT
-                dTMdt[Ind+5] = dTMdt[Ind+5] - masslist[ii]*rSmooth*rV[2]
+                dTMdt[Ind+5] = dTMdt[Ind+5] - masslist[ii]*F*rV[2]
         
-        GradientLog[IndD] = GradientLocal[0]
+        GradientLog[IndD  ] = GradientLocal[0]
         GradientLog[IndD+1] = GradientLocal[1]
         GradientLog[IndD+2] = GradientLocal[2]
 
-                
     return dTMdt, GradientLog
 
 
-def FWNBodyAdvance3(TMState,h,masslist,phiSP,a,gridlength,resol,NS):
+
+
+
+FWNBody3 = FWNBody
+FWNBody3_NI = FWNBody_NI
+
+def NBodyAdvance(TMState,h,masslist,phiSP,a,gridlength,resol,NS):
         #
         if NS == 0: # NBody Dynamics Off
-            return TMState, 0
+            
+            Step, GradientLog = FWNBody3(0,TMState,masslist,phiSP,a,gridlength,resol)
+            
+            return TMState, GradientLog
+        
         if NS == 1:
  
             Step, GradientLog = FWNBody3(0,TMState,masslist,phiSP,a,gridlength,resol)
@@ -902,7 +1023,42 @@ def FWNBodyAdvance3(TMState,h,masslist,phiSP,a,gridlength,resol,NS):
             TMStateOut = TMState
 
             return TMStateOut, GradientLog
-    
+
+
+def NBodyAdvance_NI(TMState,h,masslist,phiSP,a,gridlength,resol,NS):
+        #
+        if NS == 0: # NBody Dynamics Off
+            
+            Step, GradientLog = FWNBody3_NI(0,TMState,masslist,phiSP,a,gridlength,resol)
+            
+            return TMState, GradientLog
+        
+        if NS == 1:
+ 
+            Step, GradientLog = FWNBody3_NI(0,TMState,masslist,phiSP,a,gridlength,resol)
+            TMStateOut = TMState + Step*h
+            
+            return TMStateOut, GradientLog
+        
+        elif NS%4 == 0:
+            
+            NRK = int(NS/4)
+            
+            H = h/NRK
+            
+            for RKI in range(NRK):
+                TMK1, Trash = FWNBody3_NI(0,TMState,masslist,phiSP,a,gridlength,resol)
+                TMK2, Trash = FWNBody3_NI(0,TMState + H/2*TMK1,masslist,phiSP,a,gridlength,resol)
+                TMK3, Trash = FWNBody3_NI(0,TMState + H/2*TMK2,masslist,phiSP,a,gridlength,resol)
+                TMK4, GradientLog = FWNBody3_NI(0,TMState + H*TMK3,masslist,phiSP,a,gridlength,resol)
+                TMState = TMState + H/6*(TMK1+2*TMK2+2*TMK3+TMK4)
+            
+            TMStateOut = TMState
+
+            return TMStateOut, GradientLog
+
+
+
 ######################### Soliton Init Factory Setting!
 
 def LoadDefaultSoliton():
@@ -913,7 +1069,7 @@ def LoadDefaultSoliton():
     
     return f
 
-######################### Soliton Init
+######################### The fun kind of Soliton Init.
 
 def BHGuess(Ratio):
 
@@ -1483,12 +1639,16 @@ PC_jit = numba.jit(planeConvolve)
     
     
 ######################### New Version With Built-in I/O Management
-def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, DumpInit = False, IsoP = False, DynDrag = False, UseDispSponge = False, NonVerbose = False,Steep = 100000):
+######################### Central Function
+######################### Hello There!
+######################### With Code Adapted from Yale Cosmology. Full information please see LICENSE.
+def evolve(save_path,run_folder, Draft = True, EdgeClear = False, DumpInit = False, IsoP = False, UseDispSponge = False, SelfGravity = True, NBodyInterp = True):
     
-    if NonVerbose:
-        clear_output()
-    else:
-        print('\n\n\n')
+
+    Method = 3 # Backward Compatibility
+    clear_output()
+
+    print('\n\n\n')
     print(f"=========={Version}: {D_version}==========")
         
     timestamp = run_folder
@@ -1511,8 +1671,8 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
         Density = 0
         UVel = [0,0,0]
     
-    if a>=1e6:
-        print(f"{Version} IO: Smoothing factor has been reset!")
+    if a>=1e8:
+        print(f"{Version} IO: Smoothing has been turned off!")
         a = 0
     
     print(f"{Version} IO: Loaded Parameters from {configfile}")
@@ -1540,10 +1700,23 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
             print("WARNING: Field Smoothing factor too small, and the perfomance will be compromised.")
 
         if HWHM <= length / (4*resol):
-            print("WARNING: The field peak is narrower than half a grid. There may be artifitial energy fluctuations.")
+            print("WARNING: With the smoothing setting used, there may be artifitial energy fluctuations.")
     
     if EdgeClear:
         print("WARNING: The Wavefunction on the boundary planes will be Auto-Zeroed at every iteration.")
+    
+    
+    
+    
+    if SelfGravity == False:
+        print(f"{Version} SP: ULDM Self-Gravity DISABLED.")    
+    else:
+        print(f"{Version} SP: ULDM Self-Gravity ENABLED.")
+        
+    if NBodyInterp == False:
+        print(f"{Version} SP: NBody Interpolation for ULDM Potential DISABLED.")
+    else:
+        print(f"{Version} SP: NBody Interpolation for ULDM Potential ENABLED.")
         
     masslist = []
     
@@ -1554,22 +1727,19 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
 
     gridlength = convert(length, length_units, 'l')
     
-    b = gridlength * B / 2
+    b = gridlength * B/2
 
     t = convert(duration, duration_units, 't')
 
     t0 = convert(start_time, duration_units, 't')
+    
+    cmass = convert(central_mass, m_mass_unit, 'm')
 
     Density = convert(Density,density_unit,'d')
     
     Vcell = (gridlength / float(resol)) ** 3
     
-    if B != 0:
-        print(f'{Version} NBody: Newtonian Gravitational Field Cut-off: Domain Size / {1/B:3f}')
-    
     ne.set_num_threads(num_threads)
-    
-    cmass = 0
     
     ##########################################################################################
     # Backwards Compatibility
@@ -1678,7 +1848,7 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
             funct = initsoliton_jit(funct, xarray, yarray, zarray, position, alphaL, fL, delta_xL)
             
             if(np.isnan(funct).any()):
-                print('Something is seriously wrong')
+                print('Something is seriously wrong!')
                 raise RuntimeError('Duh')
             ####### Impart velocity to solitons in Galilean invariant way
             velx = velocity[0]
@@ -1823,14 +1993,14 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
     EGPCM = 0
     for particle in particles:
                
-        TMmass = convert(particle[0], m_mass_unit, 'm')
+        mT = convert(particle[0], m_mass_unit, 'm')
         
-        if TMmass == 0:
+        if mT == 0:
             print(f"{Version} NBody: Particle #{MI} loaded as observer.")
         else:
-            print(f"{Version} NBody: Particle #{MI} loaded, with (code) mass {TMmass:.3f}")
+            print(f"{Version} NBody: Particle #{MI} loaded, with (code) mass {mT:.3f}")
         
-        masslist.append(TMmass)
+        masslist.append(mT)
 
         position = convert(np.array(particle[1]), m_position_unit, 'l')  
         velocity = convert(np.array(particle[2]), m_velocity_unit, 'v')
@@ -1847,24 +2017,24 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
         
         TMState.append([TMx,TMy,TMz,Vx,Vy,Vz])
         
-        if TMmass != 0:
+        if mT != 0:
                        
             distarrayTM = ne.evaluate("((xarray-TMx)**2+(yarray-TMy)**2+(zarray-TMz)**2)**0.5") # Radial coordinates
 
+
             if a == 0:
-                phiTM = ne.evaluate("phiTM-TMmass/(distarrayTM)")
+                phiTM = ne.evaluate("phiTM-mT/(distarrayTM)")
             else:
-                phiTM = ne.evaluate("phiTM-a*TMmass/(a*distarrayTM+exp(-a*distarrayTM))")
+                phiTM = ne.evaluate("phiTM-a*mT/sqrt(1+a**2*distarrayTM**2)")
 
-            if b > 0:
-
-
-                
-                phiTM = phiTM * 1/2*(np.tanh((b-distarrayTM)*Steep)+1)
+#if b > 0:
+#
+#
+#        phiTM = phiTM * 1/2*(np.tanh((b-distarrayTM)*Steep)+1)
         
         
         if (save_options[3]):
-            EGPCM += TMmass*QuickInterpolate(phiSP,gridlength,resol,np.array([TMx,TMy,TMz]))
+            EGPCM += mT*QuickInterpolate(phiSP,gridlength,resol,np.array([TMx,TMy,TMz]))
         MI = int(MI + 1)
         
         # FW
@@ -1873,7 +2043,10 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
     TMState = np.array(TMState)
     TMState = TMState.flatten(order='C')
     
-    phi = phiSP + phiTM
+    if SelfGravity:
+        phi = phiSP + phiTM
+    else: 
+        phi = phiTM
     
     if NumTM == 1:
         Vinitial = TMState[3:6]
@@ -1897,8 +2070,6 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
 
         calculate_energies(rho, Vcell, phiSP,phiTM, psi, karray2, fft_psi, ifft_funct, Density,Uniform, egpcmlist, egpsilist, ekandqlist, egylist, mtotlist)
     
-
-    
     GradientLog = np.zeros(NumTM*3)
     
     os.mkdir(str(loc + '/Outputs'))
@@ -1921,12 +2092,6 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
     else:
         print(f'{Version} IO: Successfully initiated Wavefunction and NBody Initial Conditions.')
 
-
-    if DynDrag:
-        
-        # It has to be in 'y'
-        
-        DragLog = []
         
         
         
@@ -2002,10 +2167,9 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
         
         psi = ifft_funct(funct)
 
-        
 
         if UseDispSponge:
-            prog_bar(actual_num_steps, ix + 1, tint,' DS ')
+            prog_bar(actual_num_steps, ix + 1, tint,'DS  ')
             psi *= np.exp(-PreMult*h)
                     
         rho = ne.evaluate("real(abs(psi)**2)")
@@ -2017,7 +2181,7 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
         phik[0, 0, 0] = 0
 
 
-        prog_bar(actual_num_steps, ix + 1, tint,' SP ')
+        prog_bar(actual_num_steps, ix + 1, tint,'SP  ')
         # New Green Function Methods
         if not IsoP:
             phiSP = irfft_phi(phik)
@@ -2025,11 +2189,17 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
             phiSP = IP_jit(rho, green, gridlength, fft_X, ifft_X, fft_plane, ifft_plane)
 
         # FW STEP MAGIC HAPPENS HERE
-        prog_bar(actual_num_steps, ix + 1, tint,'TM1 ')
+        prog_bar(actual_num_steps, ix + 1, tint,'RK4 ')
+        
+        if NBodyInterp:
 
-        TMState, GradientLog = FWNBodyAdvance3(TMState,h,masslist,phiSP,a,gridlength,resol,NS)
+            TMState, GradientLog = NBodyAdvance(TMState,h,masslist,phiSP,a,gridlength,resol,NS)
+            
+        else:
+
+            TMState, GradientLog = NBodyAdvance_NI(TMState,h,masslist,phiSP,a,gridlength,resol,NS)
  
-        prog_bar(actual_num_steps, ix + 1, tint,'TM2 ')
+        prog_bar(actual_num_steps, ix + 1, tint,'Phi ')
         phiTM = pyfftw.zeros_aligned((resol, resol, resol), dtype='float64') # Reset!
             
         for MI in range(NumTM):
@@ -2048,20 +2218,19 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
                 if a == 0:
                     phiTM = ne.evaluate("phiTM-mT/(distarrayTM)")
                 else:
-                    phiTM = ne.evaluate("phiTM-a*mT/(a*distarrayTM+exp(-a*distarrayTM))")
+                    phiTM = ne.evaluate("phiTM-a*mT/sqrt(1+a**2*distarrayTM**2)")
 
                 if b > 0:
                     phiTM = phiTM * 1/2*(np.tanh((b-distarrayTM)*Steep)+1)
             
                 if (save_options[3]) and ((ix + 1) % its_per_save) == 0:
                     EGPCM += mT*QuickInterpolate(phiSP,gridlength,resol,np.array([TMx,TMy,TMz]))
-         
-        
+            
+        if SelfGravity:
+            phi = ne.evaluate('phiSP + phiTM')
+        else: 
+            phi = phiTM
 
-        phi = phiTM + phiSP # Turned off the other side.
-        
-        
-        
         prog_bar(actual_num_steps, ix + 1, tint,' FT ')
         #Next if statement ensures that an extra half step is performed at each save point
         if (((ix + 1) % its_per_save) == 0) and HaSt == 0:
@@ -2100,33 +2269,7 @@ def evolve(save_path,run_folder, Method = 3, Draft = True, EdgeClear = False, Du
                 np.save(os.path.join(os.path.expanduser(loc), "Outputs/egpsilist.npy"), egpsilist)
                 np.save(os.path.join(os.path.expanduser(loc), "Outputs/ekandqlist.npy"), ekandqlist)
                 np.save(os.path.join(os.path.expanduser(loc), "Outputs/masseslist.npy"), mtotlist)
-        
-        ## New Features for Dyn Drag
-        
-        if DynDrag:
-            prog_bar(actual_num_steps, ix + 1, tint,' DD ')
-        
-            phiGrad = np.gradient(phiSP, gridvec,gridvec,gridvec, edge_order = 2)
-           
-            phiGradY = phiGrad[1]
-            
-            DragMat = ne.evaluate('rho*phiGradY')
-            
-            Drag = -1*np.sum(DragMat)
-           
-            DragLog.append(Drag)
-            np.save(os.path.join(os.path.expanduser(loc), "Outputs/DragCoeff.npy"), DragLog)
-            
-        
-        if (NumTM == 1) and Uniform:
-            
-            Vcurrent = TMState[3:6]
-            
-            if np.dot(Vinitial,Vcurrent)<=0:
-                
-                print(f"\n{Version} Runtime: Black Hole Has Stopped. Halting Integration.")
-                
-                break
+                    
         ################################################################################
         # UPDATE INFORMATION FOR PROGRESS BAR
 
@@ -2343,7 +2486,7 @@ def Load_Data(save_path,ts,save_options,save_number):
     return EndNum, data,  TMdata, phidata,    graddata, phasedata
 
 
-def SmoothingReport(a,resol,clength):
+def SmoothingReport(a,resol,clength,B = 0):
     import matplotlib.pyplot as plt
 
     GridLenFS = clength/(resol)
@@ -2352,7 +2495,7 @@ def SmoothingReport(a,resol,clength):
     COMid = resol/2*np.sqrt(2)
     COMax = resol/2*np.sqrt(3)
    
-    fig_grav = plt.figure(figsize=(6, 6))
+    fig_grav = plt.figure(figsize=(12, 12))
 
     # Diagnostics For Field Smoothing
     
@@ -2366,7 +2509,7 @@ def SmoothingReport(a,resol,clength):
     
     GOrig = -1/rR
     
-    GMod = -a*1/(a*rR+np.exp(-a*rR))
+    GMod = -a*1/np.sqrt(1+a**2*rR**2)
     
     GDiff = - GOrig + GMod
     
@@ -2415,7 +2558,7 @@ def SmoothingReport(a,resol,clength):
     print("  Radius outside which the fields are practically indistinguishable (Grids): %.0f" % rS)
     print("  Modified Potential HWHM (Grids): %.0f" % rQ)
     
-    
+
 def CutoffReport(B,resol,clength,Steep = 100):
     import matplotlib.pyplot as plt
     fig_b = plt.figure(figsize=(7, 5))
@@ -2435,7 +2578,6 @@ def CutoffReport(B,resol,clength,Steep = 100):
     ax1.set_ylim([0,1.1])
     
     
-
 def Load_Config(configpath):
     
     with open(configpath, 'r') as configfile:
@@ -2737,6 +2879,7 @@ def NBodyEnergy(MassListSI,TMDataSI,EndNum,a=0,length_unit = ''): # kg, m, m/s, 
                 Vx = Data[int(Index1+3)]
                 Vy = Data[int(Index1+4)]
                 Vz = Data[int(Index1+5)]
+            
                 KS[i] += 1/2*MassListSI[Mass1]*(Vx**2+Vy**2+Vz**2) # J
 
             for Mass2 in range (Mass1+1,NBo,1):
@@ -2753,10 +2896,8 @@ def NBodyEnergy(MassListSI,TMDataSI,EndNum,a=0,length_unit = ''): # kg, m, m/s, 
                 if a == 0:
                     PS[i] += - 1*G*m1*m2/rN
                 else:
-                    PS[i] += - 1*G*m1*m2*ADim/(ADim*rN+np.exp(-ADim*rN))
+                    PS[i] += - 1*G*m1*m2*ADim/np.sqrt(1+ADim*2*rN**2)
 
-
-            
             
     return NBo, KS, PS
 
@@ -2853,6 +2994,7 @@ def SolitonSizeEstimate(mass,length,resol,mass_unit = '',length_unit = ''): # On
             funct[index] = np.nan
 
     plt.plot(rarray,funct,'k--')
+    
     plt.xlim([0,code_length/2])
     plt.ylim([0,funct[0]*1.1])
     plt.xlabel('Code Radial Coordinate')
@@ -2867,6 +3009,9 @@ def SolitonSizeEstimate(mass,length,resol,mass_unit = '',length_unit = ''): # On
     except IndexError:
         print('Soliton too wide!')
         return 0
+    
+
+
 
 def DefaultDBL(v = 10,vUnit = 'm/s'):
     
