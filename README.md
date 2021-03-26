@@ -1,4 +1,4 @@
-![Project Logo](https://github.com/Sifyrena/PyUL_NBody/blob/master/Project_Logo.pdf)
+![Project Logo](Project_Logo.pdf)
 
 # PyUL_NBody
 PyUltraLight NBody Addon Scheme
