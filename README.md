@@ -1,4 +1,4 @@
-![Project Logo](Project_Logo.png)
+![Logo](Project_Logo.png) 
 
 # PyUL_NBody
 PyUltraLight NBody Addon Scheme
