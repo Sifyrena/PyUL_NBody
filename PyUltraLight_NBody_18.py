@@ -127,6 +127,8 @@ def DispN(duration,duration_units,length,length_units,resol,step_factor):
     min_num_steps_int = int(min_num_steps/step_factor)
 
     print(f'The expected number of ULDM steps is {min_num_steps_int}')
+    
+    return min_num_steps_int
 
 
 
@@ -1642,8 +1644,9 @@ PC_jit = numba.jit(planeConvolve)
 ######################### Central Function
 ######################### Hello There!
 ######################### With Code Adapted from Yale Cosmology. Full information please see LICENSE.
-def evolve(save_path,run_folder, Draft = True, EdgeClear = False, DumpInit = False, IsoP = False, UseDispSponge = False, SelfGravity = True, NBodyInterp = True):
+def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, IsoP = False, UseDispSponge = False, SelfGravity = True, NBodyInterp = True, NBodyGravity = True):
     
+    Draft = True
 
     Method = 3 # Backward Compatibility
     clear_output()
@@ -1706,7 +1709,11 @@ def evolve(save_path,run_folder, Draft = True, EdgeClear = False, DumpInit = Fal
         print("WARNING: The Wavefunction on the boundary planes will be Auto-Zeroed at every iteration.")
     
     
-    
+    if NBodyGravity == False:
+        print(f"{Version} SP: NBody Gravity DISABLED.")    
+    else:
+        print(f"{Version} SP: NBody Gravity ENABLED.")     
+        
     
     if SelfGravity == False:
         print(f"{Version} SP: ULDM Self-Gravity DISABLED.")    
@@ -2043,6 +2050,9 @@ def evolve(save_path,run_folder, Draft = True, EdgeClear = False, DumpInit = Fal
     TMState = np.array(TMState)
     TMState = TMState.flatten(order='C')
     
+    if not NBodyGravity:
+        phiTM *= 0
+    
     if SelfGravity:
         phi = phiSP + phiTM
     else: 
@@ -2142,7 +2152,7 @@ def evolve(save_path,run_folder, Draft = True, EdgeClear = False, DumpInit = Fal
 
     tenth = float(save_number/10) #This parameter is used if energy outputs are saved while code is running.
 
-    print(f"{Version} Runtime: The total number of ULDM simulation steps is {int(actual_num_steps)}")
+    print(f"{Version} Runtime: There are {int(actual_num_steps)}  ULDM simulation steps @ {save_number} Snapshots")
     
     if warn == 1:
         print("WARNING: Detected significant overlap between solitons in I.V.")
@@ -2201,30 +2211,32 @@ def evolve(save_path,run_folder, Draft = True, EdgeClear = False, DumpInit = Fal
  
         prog_bar(actual_num_steps, ix + 1, tint,'Phi ')
         phiTM = pyfftw.zeros_aligned((resol, resol, resol), dtype='float64') # Reset!
-            
-        for MI in range(NumTM):
         
-            State = TMState[int(MI*6):int(MI*6+5)]
-            
-            TMx = State[0]
-            TMy = State[1]
-            TMz = State[2]
+        
+        if NBodyGravity:
+            for MI in range(NumTM):
 
-            mT = masslist[MI]
-            
-            if mT != 0:
-            
-                distarrayTM = ne.evaluate("((xarray-TMx)**2+(yarray-TMy)**2+(zarray-TMz)**2)**0.5") # Radial coordinates
-                if a == 0:
-                    phiTM = ne.evaluate("phiTM-mT/(distarrayTM)")
-                else:
-                    phiTM = ne.evaluate("phiTM-a*mT/sqrt(1+a**2*distarrayTM**2)")
+                State = TMState[int(MI*6):int(MI*6+5)]
 
-                if b > 0:
-                    phiTM = phiTM * 1/2*(np.tanh((b-distarrayTM)*Steep)+1)
-            
-                if (save_options[3]) and ((ix + 1) % its_per_save) == 0:
-                    EGPCM += mT*QuickInterpolate(phiSP,gridlength,resol,np.array([TMx,TMy,TMz]))
+                TMx = State[0]
+                TMy = State[1]
+                TMz = State[2]
+
+                mT = masslist[MI]
+
+                if mT != 0:
+
+                    distarrayTM = ne.evaluate("((xarray-TMx)**2+(yarray-TMy)**2+(zarray-TMz)**2)**0.5") # Radial coordinates
+                    if a == 0:
+                        phiTM = ne.evaluate("phiTM-mT/(distarrayTM)")
+                    else:
+                        phiTM = ne.evaluate("phiTM-a*mT/sqrt(1+a**2*distarrayTM**2)")
+
+                    if b > 0:
+                        phiTM = phiTM * 1/2*(np.tanh((b-distarrayTM)*Steep)+1)
+
+                    if (save_options[3]) and ((ix + 1) % its_per_save) == 0:
+                        EGPCM += mT*QuickInterpolate(phiSP,gridlength,resol,np.array([TMx,TMy,TMz]))
             
         if SelfGravity:
             phi = ne.evaluate('phiSP + phiTM')
