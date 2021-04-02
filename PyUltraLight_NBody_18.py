@@ -1,7 +1,6 @@
 Version   = str('PyUL2') # Handle used in console.
-D_version = str('Integrator Build 2021 04 01') # Detailed Version
-S_version = 18.5
- # Short Version
+D_version = str('Build 2021 Apr 02') # Detailed Version
+S_version = 18.7 # Short Version
 
 import time
 from datetime import datetime
@@ -60,9 +59,13 @@ def prog_bar(iteration_number, progress, tinterval,status = '    '):
         progress, status = 1, ""
     
     block = int(round(size * progress))
+    current = 1
+    if block == size:
+        current = 0
+    
     
     text = "\r[{}] {:.0f}% {}{}{} ({}{:.2f}s)".format(
-        "●" * (block) + "◐" + "○" * (size - block-1), round(progress * 100, 0),
+        "●" * (block) + "◐" * (current) + "○" * (size - block - current), round(progress * 100, 0),
         status, 'Expected Finish Time: ',ETA,'Prev. Step: ',tinterval)
     
 
@@ -1641,9 +1644,10 @@ PC_jit = numba.jit(planeConvolve)
 ######################### Central Function
 ######################### Hello There!
 ######################### With Code Adapted from Yale Cosmology. Full information please see LICENSE.
-def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, IsoP = False, UseDispSponge = False, SelfGravity = True, NBodyInterp = True, NBodyGravity = True):
+def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, IsoP = False, UseDispSponge = False, SelfGravity = True, NBodyInterp = True, NBodyGravity = True, Silent = False):
     
-    print(f"==========PyUL Version {S_version}: {D_version}==========")
+    clear_output()
+    print(f"==========PyUL Version 2.{S_version}: {D_version}==========")
 
     Draft = True
 
@@ -1652,16 +1656,18 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, IsoP = Fal
     configfile = './' + save_path + '/' + run_folder
     
     loc = configfile
-    clear_output()
-
         
     try:
         os.mkdir(str(loc + '/Outputs'))
     except(FileExistsError):
         
-        print(f"{Version} IO: Folder Contains Outputs. Remove current files and Proceed [Y/n]?")
-              
-        Protect = str(input())
+        
+        if Silent:
+            Protect = 'Y'
+        else:
+            print(f"{Version} IO: Folder Contains Outputs. Remove current files and Proceed [Y/n]?")
+
+            Protect = str(input())
         
         if Protect == 'n':
             return
@@ -1673,6 +1679,9 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, IsoP = Fal
             
             shutil.rmtree(str(loc + '/Outputs'))
             os.mkdir(str(loc + '/Outputs'))
+            
+        else:
+            return
         
         
     
@@ -2610,13 +2619,6 @@ def CutoffReport(B,resol,clength,Steep = 100):
     ax1.plot(xAr,Premult)
     ax1.set_ylim([0,1.1])
     
-    
-def Load_Config(configpath):
-    
-    with open(configpath, 'r') as configfile:
-        config = configfile.read()
-        print(config)
-
         
 def EmbedParticle(particles,embeds,solitons):
 
@@ -2678,9 +2680,37 @@ def GenerateConfig(NS, central_mass, length, length_units, resol, duration, dura
         else:
             timestamp = tm + f'@{resol}'
 
-           
+    Dir = f"./{save_path}/{timestamp}"
+      
+        
+    try:
+        os.makedirs(Dir)
+    except(FileExistsError):
+        import shutil
+        if NoInteraction:
+            shutil.rmtree(Dir)
+            os.mkdir(Dir)
+            
+        else: 
+            print(f"{Version} IO: Folder Not Empty. Are you sure you want to proceed [Y/n]? \nTo continue using the pre-existing config file, type [C].")
+              
+            Protect = str(input())
+        
+            if Protect == 'n':
+                return
 
-    os.makedirs('{}{}{}{}'.format('./', save_path, '/', timestamp))
+            elif Protect == 'Y':
+                print('Pre-existing files removed.')
+
+                shutil.rmtree(Dir)
+                os.mkdir(Dir)
+                
+            elif Protect == 'C':
+                shutil.rmtree(str(Dir+'/Outputs'))
+                print('Using pre-existing config in folder.')
+                return timestamp
+                
+                
 
 
     Conf_data = {}
@@ -2761,7 +2791,9 @@ def GenerateConfig(NS, central_mass, length, length_units, resol, duration, dura
     with open('{}{}{}{}{}'.format('./', save_path, '/', timestamp, '/config.txt'), "w+") as outfile:
         json.dump(Conf_data, outfile,indent=4)
 
-    print('ULHelper: Compiled Config in Folder', timestamp)
+        
+    if not NoInteraction:
+        print('ULHelper: Compiled Config in Folder', timestamp)
 
     return timestamp
     
@@ -3053,6 +3085,7 @@ def DefaultDBL(v = 10,vUnit = 'm/s'):
     return 2*np.pi*hbar/(axion_mass*v)
 
 
+# Relevant for Paper 1
 def SliceFinderC(TMState,resol,length,verbose = False):
 
     TMState = TMState[0:3]
@@ -3061,3 +3094,158 @@ def SliceFinderC(TMState,resol,length,verbose = False):
     if verbose:
         print(f'The test mass particle #0 is closest to {RPt[0]}x,{RPt[1]}y,{RPt[2]}z in the data.')
     return RPt
+
+
+
+def ParameterScanGenerator(path_to_config,ScanParams,ValuePool,save_path, SaveSpace = False, AutoSmooth = False):
+    
+    
+    if len(ScanParams) != len(ValuePool):
+        raise ValueError ('Did not specify the correct number of variable pools to scan over!')
+        
+    else:
+
+        print(f'Automated scan will be performed over {len(ScanParams)} parameters.')
+        
+    Product = 1
+    
+    for Pool in ValuePool:
+        
+        Product *= len(Pool)
+        
+    print(f'There will be {Product} separate simulations. They are:')
+    
+    print(list(zip(ScanParams,ValuePool)))
+  
+    print('(Units are defined in the donor config file)')
+        
+    # Load background parameters from donor config file.
+    
+    NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, embeds, Uniform,Density, density_unit,a, B, UVel = LoadConfig(path_to_config)
+    
+    if SaveSpace:
+        save_options = [False,False,False,True,True,True,False,False,True,False]
+    
+    
+    Units = []
+    
+    for ScanP in ScanParams:
+    
+        if ScanP == 'Density':
+                
+            Units.append(density_unit)
+
+        elif ScanP == 'Resolution':
+
+            Units.append('Grids')
+
+        elif ScanP == 'TM_Mass':
+
+            Units.append(m_mass_unit)
+
+        elif ScanP == 'TM_vY':
+
+            Units.append(m_velocity_unit)
+
+        elif ScanP == 'UVelY':
+
+            Units.append(s_velocity_unit)
+
+        elif ScanP == 'Step_Factor':
+
+            Units.append('')
+            
+        elif ScanP == 'Scaling':
+            
+            Units.append('')
+            
+            lengthOrig = length
+
+        else:
+            raise ValueError('Unrecognized parameter scan value used.')
+    
+    
+    
+    
+    for i in range(Product):
+
+        Str = 'ParamScan'
+
+        PreDim = Product
+
+        for j in range(len(ScanParams)):
+            
+            Pool = ValuePool[j]
+            
+            # String Manipulation
+            NPar = len(Pool)
+
+            PreDim = PreDim // NPar
+
+            iDisp = i
+
+            iDiv = iDisp // PreDim % NPar 
+
+            
+            
+            # Value Lookup
+            
+            if ScanParams[j] == 'Density':
+                
+                Density = Pool[iDiv]  
+                PString = 'DS'
+         
+            
+            elif ScanParams[j] == 'Resolution':
+                
+                resol = Pool[iDiv] 
+                PString = 'RS'
+            
+            elif ScanParams[j] == 'TM_Mass':
+                
+                particles[0][0] = Pool[iDiv]   
+                PString = 'TM'
+            
+            elif ScanParams[j] == 'TM_vY':
+                
+                particles[0][2][1] = Pool[iDiv]
+                PString = 'TV'
+                
+            elif ScanParams[j] == 'UVelY':
+                
+                UVel[1] = Pool[iDiv]  
+                PString = 'QV'
+                
+            elif ScanParams[j] == 'Step_Factor':
+                
+                step_factor = Pool[iDiv]
+                PString = 'TF'
+                
+            elif ScanParams[j] == 'Scaling':
+            
+                length = lengthOrig * Pool[iDiv]
+                PString = 'SC'
+            
+            else:
+                raise ValueError('Unrecognized parameter scan value used.')
+            
+            
+            Str += f'-{PString}{iDiv+1:02d}'
+        
+        # GenerateConfig Is Done Per i Loop
+    
+        GenerateConfig(NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_path, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles,embeds, Uniform,Density,density_unit,a,B,UVel,True,Str)
+        
+        print('Generated config file for', Str)
+        
+    file = open('{}{}{}'.format('./', save_path, '/LookUp.txt'), "w+")
+    
+    file.write(f'PyUL {S_version} Parameter Scan Settings Lookup \n')
+    
+    for line in list(zip(ScanParams,Units,ValuePool)):
+    
+        file.write((str(line)+'\n'))
+    file.close()
+        
+    return save_path
+
