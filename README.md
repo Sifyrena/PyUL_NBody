@@ -1,8 +1,5 @@
 ![Logo](Project_Logo.png) 
 
-# PyUL_NBody
-PyUltraLight 2
-
 <a id='root'></a>
 
 PyUltraLight 2.18.6
