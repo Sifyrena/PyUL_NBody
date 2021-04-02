@@ -1,6 +1,6 @@
 Version   = str('PyUL2') # Handle used in console.
-D_version = str('Integrator Build 2021 03 26, Using Plummer for NBody') # Detailed Version
-S_version = 18
+D_version = str('Integrator Build 2021 04 01') # Detailed Version
+S_version = 18.5
  # Short Version
 
 import time
@@ -62,7 +62,7 @@ def prog_bar(iteration_number, progress, tinterval,status = '    '):
     block = int(round(size * progress))
     
     text = "\r[{}] {:.0f}% {}{}{} ({}{:.2f}s)".format(
-        "▮" * block + "▯" * (size - block), round(progress * 100, 0),
+        "●" * (block) + "◐" + "○" * (size - block-1), round(progress * 100, 0),
         status, 'Expected Finish Time: ',ETA,'Prev. Step: ',tinterval)
     
 
@@ -127,8 +127,6 @@ def DispN(duration,duration_units,length,length_units,resol,step_factor):
     min_num_steps_int = int(min_num_steps/step_factor)
 
     print(f'The expected number of ULDM steps is {min_num_steps_int}')
-    
-    return min_num_steps_int
 
 
 
@@ -708,7 +706,6 @@ def QuickInterpolate(Field,gridlength,resol,position):
                 
         RNum = (position*1/gridlength+1/2)*resol
 
-        
         RPt = np.floor(RNum)
         RRem = RNum - RPt
                 
@@ -1646,23 +1643,49 @@ PC_jit = numba.jit(planeConvolve)
 ######################### With Code Adapted from Yale Cosmology. Full information please see LICENSE.
 def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, IsoP = False, UseDispSponge = False, SelfGravity = True, NBodyInterp = True, NBodyGravity = True):
     
+    print(f"==========PyUL Version {S_version}: {D_version}==========")
+
     Draft = True
 
     Method = 3 # Backward Compatibility
+    
+    configfile = './' + save_path + '/' + run_folder
+    
+    loc = configfile
     clear_output()
 
-    print('\n\n\n')
-    print(f"=========={Version}: {D_version}==========")
+        
+    try:
+        os.mkdir(str(loc + '/Outputs'))
+    except(FileExistsError):
+        
+        print(f"{Version} IO: Folder Contains Outputs. Remove current files and Proceed [Y/n]?")
+              
+        Protect = str(input())
+        
+        if Protect == 'n':
+            return
+        
+        elif Protect == 'Y':
+            import shutil
+            
+            print('Pre-existing Output files removed.')
+            
+            shutil.rmtree(str(loc + '/Outputs'))
+            os.mkdir(str(loc + '/Outputs'))
+        
+        
+    
         
     timestamp = run_folder
     
-    configfile = './' + save_path + '/' + run_folder
+
     
     file = open('{}{}{}'.format('./', save_path, '/latest.txt'), "w+")
     file.write(run_folder)
     file.close()
     
-    loc = configfile
+
             
     num_threads = multiprocessing.cpu_count()
     
@@ -2081,8 +2104,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, IsoP = Fal
         calculate_energies(rho, Vcell, phiSP,phiTM, psi, karray2, fft_psi, ifft_funct, Density,Uniform, egpcmlist, egpsilist, ekandqlist, egylist, mtotlist)
     
     GradientLog = np.zeros(NumTM*3)
-    
-    os.mkdir(str(loc + '/Outputs'))
+
 
     #######################################
     
@@ -2311,7 +2333,6 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, IsoP = Fal
 ################################################################################
 ################################################################################
 ################################################################################
-
 
 def SSEst(save_options, save_number, resol):
     
@@ -3030,3 +3051,13 @@ def DefaultDBL(v = 10,vUnit = 'm/s'):
     v = convert_between(v,vUnit,'m/s','v')
     
     return 2*np.pi*hbar/(axion_mass*v)
+
+
+def SliceFinderC(TMState,resol,length,verbose = False):
+
+    TMState = TMState[0:3]
+    RNum = (np.array(TMState)*1/length+1/2)*resol
+    RPt = np.floor(RNum)
+    if verbose:
+        print(f'The test mass particle #0 is closest to {RPt[0]}x,{RPt[1]}y,{RPt[2]}z in the data.')
+    return RPt
