@@ -4,7 +4,6 @@
 PyUltraLight 2
 
 <a id='root'></a>
-![Project Logo](Project_Logo.pdf)
 
 PyUltraLight 2.18.6
 
