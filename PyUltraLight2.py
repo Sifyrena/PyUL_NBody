@@ -1,6 +1,6 @@
 Version   = str('PyUL2') # Handle used in console.
-D_version = str('Build 2021 Apr 02') # Detailed Version
-S_version = 18.7 # Short Version
+D_version = str('Build 2021 Apr 08') # Detailed Version
+S_version = 19 # Short Version
 
 import time
 from datetime import datetime
@@ -28,20 +28,15 @@ try:
 except ModuleNotFoundError:
     def LW(a):
         return -0.15859433956303937
-
-    
-    
+ 
 ### AUX. FUNCTION TO GENERATE TIME STAMP
 
 def GenFromTime():
-    tm = time.localtime()
-    talt = ['0', '0', '0']
-    for i in range(3, 6):
-        if tm[i] in range(0, 10):
-            talt[i - 3] = '{}{}'.format('0', tm[i])
-        else:
-            talt[i - 3] = tm[i]
-    timestamp = '{}{}{}{}{}{}{}{}{}'.format(tm[0], tm[1], tm[2], '_', talt[0], '', talt[1], '', talt[2])
+    
+    from datetime import datetime
+
+    now = datetime.now() # current date and time
+    timestamp = now.strftime("%Y%m%d_%H%M%S")
     
     return timestamp
 
@@ -71,9 +66,25 @@ def prog_bar(iteration_number, progress, tinterval,status = '    '):
 
     print(f'{text}', end="",flush='true')
 
+####################### Credits Information
+def PyULCredits(IsoP = False,UseDispSponge = False,embeds = []):
+    print(f"==============================================================================")
+    print(f"{Version}.{S_version}: (c) 2020 - 2021 Y. Wang and collaborators. \nAuckland Cosmology Group\n") 
+    print("Original PyUltraLight Team:\nEdwards, F., Kendall, E., Hotchkiss, S. & Easther, R.\n\
+arxiv.org/abs/1807.04037")
     
-####################### AUX. FUNCTION For Debugging
+    if IsoP or UseDispSponge or (embeds != []):
+        print(f"\n================== External Module In Use ================== \n")
+    if IsoP:
+        print(f"Isolated ULDM Potential Implementation \nAdapted from J. L. Zagorac et al. Yale Cosmology \n")
+        
+    if UseDispSponge:
+        print(f"Dispersive Sponge Condition \nAdapted from J. L. Zagorac et al. Yale Cosmology \n")
+        
+    if embeds != []:
+        print(f"Embedded Soliton Profiles \nAdapted from N. Guo et al. Auckland Cosmology Group \n")
 
+    print(f"==============================================================================")
 
 num_threads = multiprocessing.cpu_count()
 
@@ -296,6 +307,8 @@ def convert(value, unit, type):
     elif (type == 'd'):
         if (unit == ''):
             converted = value
+        elif (unit == 'Crit'):
+            converted = value / omega_m0 
         elif (unit == 'MSol/pc3'):
             converted = value * solar_mass / mass_unit * length_unit**3 / parsec**3
         elif (unit == 'kg/m3'):
@@ -378,6 +391,8 @@ def convert_back(value, unit, type):
     elif (type == 'd'):
         if (unit == ''):
             converted = value
+        elif (unit == 'Crit'):
+            converted = value * omega_m0 
         elif (unit == 'MSol/pc3'):
             converted = value / solar_mass * mass_unit / length_unit**3 * parsec**3
         elif (unit == 'kg/m3'):
@@ -986,9 +1001,6 @@ def FWNBody_NI(t,TMState,masslist,phiSP,a,gridlength,resol):
         GradientLog[IndD+2] = GradientLocal[2]
 
     return dTMdt, GradientLog
-
-
-
 
 
 FWNBody3 = FWNBody
@@ -1631,8 +1643,6 @@ def LoadSoliton(Ratio):
 ##########################################################################################
 # CREATE THE Just-In-Time Functions (work in progress)
 
-print(f'{Version} Runtime: JIT optimisations under development. Please ignore Numba warnings for now.')
-
 initsoliton_jit = numba.jit(initsoliton)
 
 IP_jit = numba.jit(isolatedPotential)
@@ -1647,8 +1657,7 @@ PC_jit = numba.jit(planeConvolve)
 def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, IsoP = False, UseDispSponge = False, SelfGravity = True, NBodyInterp = True, NBodyGravity = True, Silent = False):
     
     clear_output()
-    print(f"==========PyUL Version 2.{S_version}: {D_version}==========")
-
+    
     Draft = True
 
     Method = 3 # Backward Compatibility
@@ -1682,24 +1691,21 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, IsoP = Fal
             
         else:
             return
-        
-        
-    
-        
+
     timestamp = run_folder
-    
 
     
     file = open('{}{}{}'.format('./', save_path, '/latest.txt'), "w+")
     file.write(run_folder)
     file.close()
-    
 
-            
     num_threads = multiprocessing.cpu_count()
     
     NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, embeds, Uniform,Density, density_unit,a, B, UVel = LoadConfig(configfile)
 
+    # External Credits Print
+    PyULCredits(IsoP,UseDispSponge,embeds)
+    print(f"{D_version}\n")
     # Embedded particles are Pre-compiled into the list.
     
     if not Uniform:
@@ -1725,37 +1731,27 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, IsoP = Fal
     
     if a == 0:
         print(f"{Version} NBody: Using 1/r Point Mass Potential.")
-        HWHM = length/(2*resol)
-    else: 
-        print(f"{Version} NBody: The point mass field smoothing factor is {a:.5f}.")
-        HWHM = (LW(-np.exp(-2))+2)/a # inversely proportional to a.
-        HWHM = np.real(HWHM)
-
-        if HWHM > length / 4:
-            print("WARNING: Field Smoothing factor too small, and the perfomance will be compromised.")
-
-        if HWHM <= length / (4*resol):
-            print("WARNING: With the smoothing setting used, there may be artifitial energy fluctuations.")
-    
+            
     if EdgeClear:
         print("WARNING: The Wavefunction on the boundary planes will be Auto-Zeroed at every iteration.")
-    
-    
+
+    print('--------------------------Additional Settings---------------------------------')
+
     if NBodyGravity == False:
-        print(f"{Version} SP: NBody Gravity DISABLED.")    
+        print(f"Particle gravity OFF.")    
     else:
-        print(f"{Version} SP: NBody Gravity ENABLED.")     
+        print(f"Particle gravity  ON.")     
         
-    
     if SelfGravity == False:
-        print(f"{Version} SP: ULDM Self-Gravity DISABLED.")    
+        print(f"ULDM self-gravity OFF.")    
     else:
-        print(f"{Version} SP: ULDM Self-Gravity ENABLED.")
+        print(f"ULDM self-gravity  ON.")
         
     if NBodyInterp == False:
-        print(f"{Version} SP: NBody Interpolation for ULDM Potential DISABLED.")
+        print(f"NBody response to ULDM OFF.")
     else:
-        print(f"{Version} SP: NBody Interpolation for ULDM Potential ENABLED.")
+        print(f"NBody response for ULDM  ON.")
+        
         
     masslist = []
     
@@ -1833,9 +1829,10 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, IsoP = Fal
         
         DensityCom = MassCom / resol**3
         
-        print('==============================================================================')
+        print('=========================Uniform Background===================================')
         print(f"{Version} Init: Solitons overridden with a uniform wavefunction with no phase.")
-        print(f"{Version} Init: Total ULDM mass in domain is {MassCom:.4f}. This is {Density:.4f} per grid.")
+        print(f"{Version} Init: ULDM mass in domain is {MassCom:.4f}, at {Density:.4f} per grid.")
+        print(f"{Version} Init: ULDM Global velocity is (x,y,z): {UVel[1]},{UVel[0]},{UVel[2]}.")
         print('==============================================================================')
         psi = ne.evaluate("0*psi + sqrt(Density)")
         
@@ -1865,7 +1862,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, IsoP = Fal
                 s, BHMass = BHRatioTester(RatioBU,30,1e-6,GMin,GMax,a)
                 print(f'Generating profile for Soliton with MBH/MSoliton = {RatioBU:.4f}, Part 2')
                 SolitonProfile(BHMass,s,a,not Draft)
-                print('==============================================================================')
+            print('==============================================================================')
             
             delta_xL, prealphaL, betaL,CutOff = LoadSolitonConfig(RatioBU)
 
@@ -2176,14 +2173,17 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, IsoP = Fal
 
     ##########################################################################################
     # LOOP NOW BEGINS
-    print("======================================================")
+    if Silent:
+        clear_output()
+    else:
+        print("======================================================")
     print(f"{Version} Runtime: Simulation Started at {tBeginDisp}.")
     
     HaSt = 1  # 1 for a half step 0 for a full step
 
     tenth = float(save_number/10) #This parameter is used if energy outputs are saved while code is running.
 
-    print(f"{Version} Runtime: There are {int(actual_num_steps)}  ULDM simulation steps @ {save_number} Snapshots")
+    print(f"{Version} Runtime: Taking {int(actual_num_steps)} DM simulation steps @ {save_number} Snapshots")
     
     if warn == 1:
         print("WARNING: Detected significant overlap between solitons in I.V.")
@@ -2338,7 +2338,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, IsoP = Fal
     print('')
     print(f"{Version} Runtime: Run Complete. Time Elapsed (d:h:m:s): {day:.0f}:{hour:.0f}:{minutes:.0f}:{seconds:.2f}")
 
-    
+
 ################################################################################
 ################################################################################
 ################################################################################
@@ -2771,11 +2771,11 @@ def GenerateConfig(NS, central_mass, length, length_units, resol, duration, dura
 
             })
 
-    Conf_data['Central Mass'] = central_mass
+    Conf_data['Central Mass'] = 0
 
-    Conf_data['Field Smoothing'] = a
+    Conf_data['Field Smoothing'] = np.real(a)
 
-    Conf_data['NBody Cutoff Factor'] = B
+    Conf_data['NBody Cutoff Factor'] = np.real(0)
 
 
     Conf_data['Uniform Field Override'] = ({
