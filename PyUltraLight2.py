@@ -1654,7 +1654,7 @@ PC_jit = numba.jit(planeConvolve)
 ######################### Central Function
 ######################### Hello There!
 ######################### With Code Adapted from Yale Cosmology. Full information please see LICENSE.
-def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, IsoP = False, UseDispSponge = False, SelfGravity = True, NBodyInterp = True, NBodyGravity = True, Silent = False):
+def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, IsoP = False, UseDispSponge = False, SelfGravity = True, NBodyInterp = True, NBodyGravity = True, Silent = False, AutoStop = False):
     
     clear_output()
     
@@ -1751,6 +1751,11 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, IsoP = Fal
         print(f"NBody response to ULDM OFF.")
     else:
         print(f"NBody response for ULDM  ON.")
+    
+    if AutoStop and Uniform and NumTM == 1:
+        print("Integration will automatically halt when test mass stops.")
+        
+        
         
         
     masslist = []
@@ -1823,9 +1828,13 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, IsoP = Fal
 
     if Uniform:
         
+        
         MassCom = Density*gridlength**3
         
         UVelocity = convert(np.array(UVel),s_velocity_unit, 'v')
+        
+        if AutoStop and NumTM == 1:
+            ThresholdVelocity = -1*UVelocity[1]
         
         DensityCom = MassCom / resol**3
         
@@ -1916,14 +1925,17 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, IsoP = Fal
             velz = velocity[2]
             funct = ne.evaluate("exp(1j*(alpha*beta*t0 + velx*xarray + vely*yarray + velz*zarray -0.5*(velx*velx+vely*vely+velz*velz)*t0  + phase))*funct")
             psi = ne.evaluate("psi + funct")
-       
-
+   
+    fft_psi = pyfftw.builders.fftn(psi, axes=(0, 1, 2), threads=num_threads)
+    
+    ifft_funct = pyfftw.builders.ifftn(funct, axes=(0, 1, 2), threads=num_threads)       
+    if not Uniform:
+        print(f"{Version} SP: Peforming an Additional FFT Step to Get rid of zeroes.")
+        psi = np.fft.ifftn(np.fft.fftn(psi)) # New FFT Step 
         
     rho = ne.evaluate("real(abs(psi)**2)")
 
-    fft_psi = pyfftw.builders.fftn(psi, axes=(0, 1, 2), threads=num_threads)
-    
-    ifft_funct = pyfftw.builders.ifftn(funct, axes=(0, 1, 2), threads=num_threads)
+
 
     ##########################################################################################
     # COMPUTE SIZE OF TIMESTEP (CAN BE INCREASED WITH step_factor)
@@ -2073,7 +2085,9 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, IsoP = Fal
             EGPCM += mT*QuickInterpolate(phiSP,gridlength,resol,np.array([TMx,TMy,TMz]))
         MI = int(MI + 1)
         
-        # FW
+        if AutoStop and Uniform and len(particles) == 1:
+            ThresholdVelocity += Vy
+            # Always shooting towards the right.
 
     masslist = np.array(masslist)
     TMState = np.array(TMState)
@@ -2111,6 +2125,10 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, IsoP = Fal
     
     GradientLog = np.zeros(NumTM*3)
 
+    if save_options[10]:
+        
+        EntropyLog = [-1*np.sum(ne.evaluate('rho*log(rho)'))]
+        np.save(os.path.join(os.path.expanduser(loc), "Outputs/Entro.npy"), EntropyLog)
 
     #######################################
     
@@ -2284,12 +2302,10 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, IsoP = Fal
             prog_bar(actual_num_steps, ix + 1, tint,' IO ')
             #Next block calculates the energies at each save, not at each timestep.
             if (save_options[3]):
-                
                 calculate_energies(rho, Vcell, phiSP,phiTM, psi, karray2, fft_psi, ifft_funct, Density,Uniform, egpcmlist, egpsilist, ekandqlist, egylist, mtotlist)
-
            
-        ################################################################################
-        # SAVE DESIRED OUTPUTS
+################################################################################
+# SAVE DESIRED OUTPUTS
         if ((ix + 1) % its_per_save) == 0:
         
             egpcmMlist.append(EGPCM)
@@ -2312,7 +2328,17 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, IsoP = Fal
                 np.save(os.path.join(os.path.expanduser(loc), "Outputs/egpsilist.npy"), egpsilist)
                 np.save(os.path.join(os.path.expanduser(loc), "Outputs/ekandqlist.npy"), ekandqlist)
                 np.save(os.path.join(os.path.expanduser(loc), "Outputs/masseslist.npy"), mtotlist)
-                    
+         
+            if save_options[10]:
+                EntropyLog.append(-1*np.sum(ne.evaluate('rho*log(rho)')))
+                np.save(os.path.join(os.path.expanduser(loc), "Outputs/Entro.npy"), EntropyLog)
+                
+        if AutoStop and Uniform and len(particles)==1:
+            VCur = TMState[4] - UVelocity[1]
+
+            if VCur * ThresholdVelocity <= 0:
+                print(f'\nTest mass stopped at step {ix}!')
+                break
         ################################################################################
         # UPDATE INFORMATION FOR PROGRESS BAR
 
