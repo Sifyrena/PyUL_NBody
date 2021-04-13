@@ -2229,8 +2229,8 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     if Silent:
         clear_output()
 
-    print(f"{Vesrion} Runtime: {resol} Resolution at {duration:.4g}{duration_units}")
-    print(f"{Vesrion} Runtime: Simulation Started at {tBeginDisp}.")
+    print(f"{Version} Runtime: {resol} Resolution at {duration:.4g}{duration_units}")
+    print(f"{Version} Runtime: Simulation Started at {tBeginDisp}.")
             
     HaSt = 1  # 1 for a half step 0 for a full step
 
