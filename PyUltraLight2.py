@@ -28,7 +28,12 @@ try:
 except ModuleNotFoundError:
     def LW(a):
         return -0.15859433956303937
- 
+### Internal Flags used for IO
+
+SaveFlags = ['3Density', '3Wfn', '2Density', 'Energy', '1Density', 'NBody', '3Grav', '2Grav', 'DF', '2Phase', 'Entropy']
+    
+    
+
 ### AUX. FUNCTION TO GENERATE TIME STAMP
 
 def GenFromTime():
@@ -1864,8 +1869,6 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
 
     psi = pyfftw.zeros_aligned((resol, resol, resol), dtype='complex128')
 
-
-
     if Uniform:
 
         MassCom = Density*gridlength**3
@@ -2201,8 +2204,6 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     tBeginDisp = datetime.fromtimestamp(tBegin).strftime("%d/%m/%Y, %H:%M:%S")
     
 
-    
-    
     ########################################################################################## 
     # Chapel Code From Yale Cosmology.
   
@@ -2224,17 +2225,15 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         PreMult[distarray<=rp] = 0
         
         print(f'{Version} IO: Dispersive Sponge Condition Pre Multiplier Ready.')
-
-        
-
     ##########################################################################################
     # LOOP NOW BEGINS
     if Silent:
         clear_output()
-    else:
-        print("======================================================")
-    print(f"{Version} Runtime: Simulation Started at {tBeginDisp}.")
-    
+
+    print(f"{loc}: {resol} Resolution at {duration}{duration_units}")
+    print(f"Simulation Started at {tBeginDisp}.")
+    print("======================================================")
+            
     HaSt = 1  # 1 for a half step 0 for a full step
 
     tenth = float(save_number/10) #This parameter is used if energy outputs are saved while code is running.
@@ -2723,6 +2722,27 @@ def EmbedParticle(particles,embeds,solitons):
     return particles, solitons, embeds
         
 
+    
+def SaveOptionsCompile(save_options):
+    result = ''
+
+    for i in zip(save_options, SaveFlags):
+        if i[0]:
+            result += (i[1]+' ')
+            
+    print(result)
+    return result
+
+def SaveOptionsDigest(OptionsText):
+    save_options = np.zeros(len(SaveFlags), dtype = bool)
+    
+    OList = OptionsText.split()
+    
+    for Word in OList:
+        save_options[SaveFlags.index(Word)] = True
+    
+    return save_options.tolist()
+ 
 def GenerateConfig(NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_path, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles,embeds, Uniform,Density,density_unit,a,B,UVel,NoInteraction = False,Name = ''
            ):
 
@@ -2734,8 +2754,7 @@ def GenerateConfig(NS, central_mass, length, length_units, resol, duration, dura
             
         else:
             timestamp = tm + f'@{resol}'
-        
-        
+   
     else:
         print("What is the name of the run? Leave blank to use automatically generated timestamp.")
         InputName = input()
@@ -2775,9 +2794,6 @@ def GenerateConfig(NS, central_mass, length, length_units, resol, duration, dura
                 shutil.rmtree(str(Dir+'/Outputs'))
                 print('Using pre-existing config in folder.')
                 return timestamp
-                
-                
-
 
     Conf_data = {}
 
@@ -2785,16 +2801,18 @@ def GenerateConfig(NS, central_mass, length, length_units, resol, duration, dura
 
     Conf_data['Config Generation Time'] = tm
 
+    OptionsText = SaveOptionsCompile(save_options)
+    
     Conf_data['Save Options'] = ({
-            'flags': save_options,
+            'Flags': OptionsText,
+            'All Supported Flags': SaveFlags,
             'number': save_number,
             'npz': npz,
             'npy': npy,
             'hdf5': hdf5
             })
 
-
-    Conf_data['Spacial Resolution'] = resol
+    Conf_data['Spatial Resolution'] = resol
 
     Conf_data['Temporal Step Factor'] = step_factor
 
@@ -2812,7 +2830,6 @@ def GenerateConfig(NS, central_mass, length, length_units, resol, duration, dura
     'Length Units': length_units,
     })
 
-
     particles, solitons, embeds = EmbedParticle(particles,embeds,solitons)
     
     Conf_data['ULDM Solitons'] = ({
@@ -2829,13 +2846,6 @@ def GenerateConfig(NS, central_mass, length, length_units, resol, duration, dura
     'Position Units': m_position_unit,
     'Velocity Units': m_velocity_unit
     })
-
-    Conf_data['Field-averaging Probes'] = ({
-
-            'Probe Array': 'Defunct',
-            'Probe Weights': 'Defunct' 
-
-            })
 
     Conf_data['Central Mass'] = 0
 
@@ -2879,10 +2889,7 @@ def Runs(save_path):
                 print("[",FLog,"]: *", runs[i],sep = '' )
             else:
                 print("[",FLog,"]: ", runs[i],sep = ''  )
-            
-        
-    
-    
+
     if FLog == 0:
         return 'EMPTY'
     
@@ -2908,11 +2915,14 @@ def LoadConfig(loc):
         with open(configfile) as json_file:
             config = json.load(json_file)
         
-        central_mass = config["Central Mass"]
+        central_mass = 0
         
         ### Simulation Stuff
-        
-        save_options = config["Save Options"]["flags"]
+        try:
+            save_options = SaveOptionsDigest(config["Save Options"]["Flags"])
+            
+        except KeyError: # Backwards Compatibility
+            save_options = config["Save Options"]["flags"]
         
         hdf5 = config["Save Options"]["hdf5"]
         
@@ -2940,7 +2950,10 @@ def LoadConfig(loc):
         
         B = config['NBody Cutoff Factor']
         
-        resol = int(config["Spacial Resolution"])
+        try:
+            resol = int(config["Spatial Resolution"])
+        except KeyError:
+            resol = int(config["Spacial Resolution"])
         
         length = config["Simulation Box"]["Box Length"]
         
