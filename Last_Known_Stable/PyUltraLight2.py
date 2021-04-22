@@ -1,6 +1,6 @@
 Version   = str('PyUL2') # Handle used in console.
-D_version = str('Build 2021 Apr 21') # Detailed Version
-S_version = 20 # Short Version
+D_version = str('Build 2021 Apr 15') # Detailed Version
+S_version = 19.4 # Short Version
 
 import time
 from datetime import datetime
@@ -58,6 +58,7 @@ omega_m0 = 0.31
 
 H_0 = 67.7 / (parsec * 1e3)  # s^-1
 
+
 CritDens = 3*H_0**2/(8*pi*G)
 # IMPORTANT
 
@@ -71,34 +72,9 @@ energy_unit = mass_unit * length_unit ** 2 / (time_unit**2)
     
 
 ### Internal Flags used for IO
-SFS = '3Density 3Wfn 2Density Energy 1Density NBody 3Grav 2Grav DF 2Phase Entropy 1Grav 3GravF 2GravF 1GravF'
-
-SNM = 'R3D P3D R2D EGY R1D NTM G3D G2D DYF A2D ENT G1D F3D F2D F1D'
-
+SFS = '3Density 3Wfn 2Density Energy 1Density NBody 3Grav 2Grav DF 2Phase Entropy'
 SaveFlags = SFS.split()
-SaveNames = SNM.split()
     
-def IOName(Type):
-    return SaveNames[SaveFlags.index(Type)]
-
-def IOSave(loc,Type,save_num,save_format = 'npy',data = []):
-    
-    file_name = f"{loc}/Outputs/{IOName(Type)}_#{save_num:03d}.{save_format}"
-
-    if save_format == 'npy':
-        np.save(file_name,data)
-    elif save_format == 'npz':
-        np.savez(file_name,data)
-    elif save_format == 'hdf5':
-        f = h5py.File(file_name, 'w')
-        dset = f.create_dataset("init", data=data)
-        f.close()
-    else:
-        raise RuntimeError('Invalid output format specified!')
-        
-def IOLoad_npy(loc,Type,save_num):
-    return np.load(f"{loc}/Outputs/{IOName(Type)}_#{save_num:03d}.npy")
-
 
 ### AUX. FUNCTION TO GENERATE TIME STAMP
 
@@ -161,7 +137,7 @@ arxiv.org/abs/1807.04037")
     
 SSLength = 6
 
-def printU(Message,SubSys = 'Sys'):
+def printU(Message,SubSys = 'Helper'):
     print(f"{Version}.{SubSys.rjust(SSLength)}: {Message}")
 
 
@@ -495,89 +471,213 @@ def initsoliton(funct, xarray, yarray, zarray, position, alpha, f, delta_x,Cutof
     return funct
 
 
-"""
-Save various properties of the various grids in various formats
-"""
-
 def save_grid(
-        rho, psi, resol, 
-        TMState, phiSP, phi, GradientLog,
+        rho, psi, resol, TMState, phiSP,
         save_options,
-        save_format,
-        loc, ix, its_per_save
+        npy, npz, hdf5,
+        loc, ix, its_per_save, GradientLog
         ):
 
-        save_num = int((ix + 1) / its_per_save)
-        
-        if (save_options[0]): # 3Density
-            
-            IOSave(loc,'3Density',save_num,save_format,rho)
-                       
-        if (save_options[1]): # 3Wfn
-            
-            IOSave(loc,'3Wfn',save_num,save_format,psi)       
-            
-        if (save_options[2]): # 2Density
-            
-            plane = rho[:, :, resol // 2]
-            IOSave(loc,'2Density',save_num,save_format,plane)
+        """
+        Save various properties of the various grids in various formats
+        """
 
-        if (save_options[4]): # 1Density Now Saving to Simulated y (Paper x axis)!
-            
-            line = rho[resol // 2, :, resol // 2]  
-            IOSave(loc,'1Density',save_num,save_format,line)
-            
-        if (save_options[5]): # TM
-            
-            IOSave(loc,'NBody',save_num,save_format,TMState)
-            
-        if (save_options[6]): # 3Grav
-            
-            IOSave(loc,'3Grav',save_num,save_format,phiSP)           
+        save_num = int((ix + 1) / its_per_save)
+
+        if (save_options[0]):
+            if (npy):
+                file_name = "Outputs/rho_#{0}.npy".format(save_num)
+                np.save(
+                    os.path.join(os.path.expanduser(loc), file_name),
+                    rho
+                )
+            if (npz):
+                file_name = "Outputs/rho_#{0}.npz".format(save_num)
+                np.savez(
+                    os.path.join(os.path.expanduser(loc), file_name),
+                    rho
+                )
+            if (hdf5):
+                file_name = "Outputs/rho_#{0}.hdf5".format(save_num)
+                file_name = os.path.join(os.path.expanduser(loc), file_name)
+                f = h5py.File(file_name, 'w')
+                dset = f.create_dataset("init", data=rho)
+                f.close()
                 
-        if (save_options[7]): # 2Grav
+                
+        if (save_options[1]): # Temporarily Appropriated!
+            
+            if (npy):
+                file_name = "Outputs/psi_#{0}.npy".format(save_num)
+                np.save(
+                    os.path.join(os.path.expanduser(loc), file_name),
+                    psi
+                )
+            if (npz):
+                file_name = "Outputs/psi_#{0}.npz".format(save_num)
+                np.savez(
+                    os.path.join(os.path.expanduser(loc), file_name),
+                    psi
+                )
+            if (hdf5):
+                file_name = "Outputs/psi_#{0}.hdf5".format(save_num)
+                file_name = os.path.join(os.path.expanduser(loc), file_name)
+                f = h5py.File(file_name, 'w')
+                dset = f.create_dataset("init", data=psi)
+                f.close()
+                
+        if (save_options[2]):
+            plane = rho[:, :, resol // 2]
+            if (npy):
+                file_name = "Outputs/plane_#{0}.npy".format(save_num)
+                np.save(
+                    os.path.join(os.path.expanduser(loc), file_name),
+                    plane
+                )
+            if (npz):
+                file_name = "Outputs/plane_#{0}.npz".format(save_num)
+                np.savez(
+                    os.path.join(os.path.expanduser(loc), file_name),
+                    plane
+                )
+            if (hdf5):
+                file_name = "Outputs/plane_#{0}.hdf5".format(save_num)
+                file_name = os.path.join(os.path.expanduser(loc), file_name)
+                f = h5py.File(file_name, 'w')
+                dset = f.create_dataset("init", data=plane)
+                f.close()
+                
+ 
+        if (save_options[4]): # Now Saving to Simulated y (Paper x axis!)
+            line = rho[resol // 2, :, resol // 2]
+            file_name2 = "Outputs/line_#{0}.npy".format(save_num)
+            np.save(
+                os.path.join(os.path.expanduser(loc), file_name2),
+                line
+            )
+
+        if (save_options[5]):
+            if (npy):
+                file_name = "Outputs/TM_#{0}.npy".format(save_num)
+                np.save(
+                    os.path.join(os.path.expanduser(loc), file_name),
+                    TMState
+                )
+            if (npz):
+                file_name = "Outputs/TM_#{0}.npz".format(save_num)
+                np.savez(
+                    os.path.join(os.path.expanduser(loc), file_name),
+                    TMState
+                )
+            if (hdf5):
+                file_name = "Outputs/TM_#{0}.hdf5".format(save_num)
+                file_name = os.path.join(os.path.expanduser(loc), file_name)
+                f = h5py.File(file_name, 'w')
+                dset = f.create_dataset("init", data=TMState)
+                f.close()
+                
+                
+        if (save_options[6]):
+            if (npy):
+                file_name = "Outputs/Field3D_#{0}.npy".format(save_num)
+                np.save(
+                    os.path.join(os.path.expanduser(loc), file_name),
+                    phiSP
+                )
+            if (npz):
+                file_name = "Outputs/Field3D_#{0}.npz".format(save_num)
+                np.savez(
+                    os.path.join(os.path.expanduser(loc), file_name),
+                    phiSP
+                )
+            if (hdf5):
+                file_name = "Outputs/Field3D_#{0}.hdf5".format(save_num)
+                file_name = os.path.join(os.path.expanduser(loc), file_name)
+                f = h5py.File(file_name, 'w')
+                dset = f.create_dataset("init", data=phiSP)
+                f.close()
+                
+                
+                
+        if (save_options[7]):
             
             phiSP_slice = phiSP[:,:,int(resol/2)] # z = 0
             
-            IOSave(loc,'2Grav',save_num,save_format,phiSP_slice)             
+            if (npy):
+                file_name = "Outputs/Field2D_#{0}.npy".format(save_num)
+                np.save(
+                    os.path.join(os.path.expanduser(loc), file_name),
+                    phiSP_slice
+                )
+            if (npz):
+                file_name = "Outputs/Field2D_#{0}.npz".format(save_num)
+                np.savez(
+                    os.path.join(os.path.expanduser(loc), file_name),
+                    phiSP_slice
+                )
+            if (hdf5):
+                file_name = "Outputs/Field2D_#{0}.hdf5".format(save_num)
+                file_name = os.path.join(os.path.expanduser(loc), file_name)
+                f = h5py.File(file_name, 'w')
+                dset = f.create_dataset("init", data=phiSP_slice)
+                f.close()
                 
-        if (save_options[8]): # DF
-           
-            IOSave(loc,'DF',save_num,save_format,GradientLog)
+                
+        if (save_options[8]):
             
-        if (save_options[9]): # 2Phase
+            if (npy):
+                file_name = "Outputs/Gradients_#{0}.npy".format(save_num)
+                np.save(
+                    os.path.join(os.path.expanduser(loc), file_name),
+                    GradientLog
+                )
+            if (npz):
+                file_name = "Outputs/Gradients_#{0}.npz".format(save_num)
+                np.savez(
+                    os.path.join(os.path.expanduser(loc), file_name),
+                    GradientLog
+                )
+            if (hdf5):
+                file_name = "Outputs/Gradients_#{0}.hdf5".format(save_num)
+                file_name = os.path.join(os.path.expanduser(loc), file_name)
+                f = h5py.File(file_name, 'w')
+                dset = f.create_dataset("init", data=GradientLog)
+                f.close()
 
-            psislice = psi[:, :, resol // 2]
+        if (save_options[9]): # Temporarily Appropriated!
             
-            argplane = np.angle(psislice)
+            psislice = psi[:, :, int(resol / 2)]
             
-            IOSave(loc,'2Phase',save_num,save_format,argplane)         
+            psiarg = np.angle(psislice)
             
-        if (save_options[11]): # 1Grav
+            if (npy):
+                file_name = "Outputs/Arg2D_#{0}.npy".format(save_num)
+                np.save(
+                    os.path.join(os.path.expanduser(loc), file_name),
+                    psiarg
+                )
+            if (npz):
+                file_name = "Outputs/Arg2D_#{0}.npz".format(save_num)
+                np.savez(
+                    os.path.join(os.path.expanduser(loc), file_name),
+                    psiarg
+                )
+            if (hdf5):
+                file_name = "Outputs/Arg2D_#{0}.hdf5".format(save_num)
+                file_name = os.path.join(os.path.expanduser(loc), file_name)
+                f = h5py.File(file_name, 'w')
+                dset = f.create_dataset("init", data=psiarg)
+                f.close()
 
-            phiSP_line = phiSP[int(resol/2),:,int(resol/2)] # z = 0
-            
-            IOSave(loc,'1Grav',save_num,save_format,phiSP_line)
-            
-        if (save_options[12]): # 3GravF
-            IOSave(loc,'3GravF',save_num,save_format,phi)
-                
-        if (save_options[13]): # 2GravF
-            phi_slice = phi[:,:,int(resol/2)]
-            
-            IOSave(loc,'2GravF',save_num,save_format,phi_slice)
-                
-        if (save_options[14]): # 1GravF
-            phi_line = phi[int(resol/2),:,int(resol/2)]
-            
-            IOSave(loc,'1GravF',save_num,save_format,phi_line)
-        
+
 # CALCULATE_ENERGIES, NEW VERSION IN 2.16
             
 def calculate_energies(rho, Vcell, phiSP,phiTM, psi, karray2, fft_psi, ifft_funct, Density,Uniform, egpcmlist, egpsilist, ekandqlist, egylist, mtotlist):
 
-
-    BoxAvg = np.mean(rho) # Mean Value in Box
+    if Uniform:
+        BoxAvg = Density
+    else:
+        BoxAvg = np.mean(rho) # Mean Value in Box
 
     # Gravitational potential energy density associated with the point masses potential
 
@@ -1591,18 +1691,17 @@ def ULRead(InitPath):
     
     return psi
 
-def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal = False, UseInit = False, IsoP = False, UseDispSponge = False, SelfGravity = True, NBodyInterp = True, NBodyGravity = True, Silent = False, AutoStop = False, AutoStop2 = False, InitPath = '', InitWeight = 1, Message = ''):
+def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal = False, UseInit = False, IsoP = False, UseDispSponge = False, SelfGravity = True, NBodyInterp = True, NBodyGravity = True, Silent = False, AutoStop = False, InitPath = '', InitWeight = 1, Message = ''):
     
     clear_output()
     
-    if AutoStop2:
-        AutoStop = False
-
     Draft = True
 
     Method = 3 # Backward Compatibility
     
-    loc = './' + save_path + '/' + run_folder
+    configfile = './' + save_path + '/' + run_folder
+    
+    loc = configfile
         
     if DumpInit and (InitPath == ''):
         raise RuntimeError("Must supply initial wavefunction!")
@@ -1641,7 +1740,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     file.close()
 
     
-    NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_format, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, embeds, Uniform,Density, density_unit,a, B, UVel = LoadConfig(loc)
+    NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, embeds, Uniform,Density, density_unit,a, B, UVel = LoadConfig(configfile)
 
         
     num_threads = multiprocessing.cpu_count()
@@ -1663,10 +1762,11 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         printU(f"Smoothing has been turned off!",'NBody')
         a = 0
     
-    printU(f"Loaded Parameters from {loc}",'IO')
+    printU(f"Loaded Parameters from {configfile}",'IO')
 
     NumSol = len(solitons)
     NumTM = len(particles)
+
             
     if (Method == 3): # 1 = Real Space Interpolation (Orange), 2 = Fourier Sum (White)
         printU(f"Using Linear Interpolation for gravity.",'NBody')
@@ -1699,9 +1799,6 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     
     if AutoStop and Uniform and NumTM == 1:
         print("Integration will automatically halt when test mass stops.")
-    
-    if AutoStop2 and Uniform and NumTM == 1:
-        print("Integration will automatically halt when test mass loses 50% of its KE.")
     
     TIntegrate = 0
     
@@ -1751,7 +1848,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     
     Kx,Ky,Kz = np.meshgrid(WN,WN,WN,sparse=True, indexing='ij',)
     
-##########################################################################################
+    ##########################################################################################
     # SET UP K-SPACE COORDINATES FOR COMPLEX DFT
 
     kvec = 2 * np.pi * np.fft.fftfreq(resol, gridlength / float(resol))
@@ -1794,101 +1891,104 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
 
     psi = pyfftw.zeros_aligned((resol, resol, resol), dtype='complex128')
 
-    MassCom = Density*gridlength**3
-
-    UVelocity = convert(np.array(UVel),s_velocity_unit, 'v')
-
-    if AutoStop and NumTM == 1:
-        ThresholdVelocity = -1*UVelocity[1]
-    else:
-        ThresholdVelocity = 0
-
-    DensityCom = MassCom / resol**3
-    
     if Uniform:
+
+        MassCom = Density*gridlength**3
+
+        UVelocity = convert(np.array(UVel),s_velocity_unit, 'v')
+
+        if AutoStop and NumTM == 1:
+            ThresholdVelocity = -1*UVelocity[1]
+        else:
+            ThresholdVelocity = 0
+            
+        DensityCom = MassCom / resol**3
+
         print('========================Uniform Background====================================')
         printU(f"Solitons overridden with a uniform wavefunction with no phase.",'Init')
-        printU(f"Background ULDM mass in domain is {MassCom:.4f}, at {Density:.4f} per grid.",'Init')
-        printU(f"Background Global velocity is (x,y,z): {UVel[1]},{UVel[0]},{UVel[2]}.",'Init')
+        printU(f"ULDM mass in domain is {MassCom:.4f}, at {Density:.4f} per grid.",'Init')
+        printU(f"ULDM Global velocity is (x,y,z): {UVel[1]},{UVel[0]},{UVel[2]}.",'Init')
         print('==============================================================================')
-    psi = ne.evaluate("0*psi + sqrt(Density)")
+        psi = ne.evaluate("0*psi + sqrt(Density)")
 
-    velx = UVelocity[0]
-    vely = UVelocity[1]
-    velz = UVelocity[2]
-    psi = ne.evaluate("exp(1j*(velx*xarray + vely*yarray + velz*zarray))*psi")
-    #psi = ne.evaluate("psi + funct")
+        velx = UVelocity[0]
+        vely = UVelocity[1]
+        velz = UVelocity[2]
+        psi = ne.evaluate("exp(1j*(velx*xarray + vely*yarray + velz*zarray))*psi")
+        psi = ne.evaluate("psi + funct")
+    else:
+        for EI,emb in enumerate(embeds):
 
-    for EI,emb in enumerate(embeds):
-
-        # 0.     1.     2.          3.                   4.
-        # [mass,[x,y,z],[vx,vy,vz], BH-Total Mass Ratio, Phase]
-        Ratio = emb[3]
-        RatioBU = float(Ratio/(1-Ratio))
-        try:
-            delta_xL, prealphaL, betaL,CutOff = LoadSolitonConfig(RatioBU)
-        except RuntimeError:
+            # 0.     1.     2.          3.                   4.
+            # [mass,[x,y,z],[vx,vy,vz], BH-Total Mass Ratio, Phase]
+            Ratio = emb[3]
+            RatioBU = float(Ratio/(1-Ratio))
+            try:
+                delta_xL, prealphaL, betaL,CutOff = LoadSolitonConfig(RatioBU)
+            except RuntimeError:
+                print('==============================================================================')
+                printU(f'Note that this process will not be required for repeated runs. To remove custom profiles, go to the folder /Soliton Profile Files/Custom.', 'Profiler')
+                print(f'Generating profile for Soliton with MBH/MSoliton = {RatioBU:.4f}, Part 1')
+                GMin,GMax = BHGuess(RatioBU)
+                s, BHMass = BHRatioTester(RatioBU,30,1e-6,GMin,GMax,a)
+                print(f'Generating profile for Soliton with MBH/MSoliton = {RatioBU:.4f}, Part 2')
+                SolitonProfile(BHMass,s,a,not Draft)
             print('==============================================================================')
-            printU(f'Note that this process will not be required for repeated runs. To remove custom profiles, go to the folder /Soliton Profile Files/Custom.', 'Profiler')
-            print(f'Generating profile for Soliton with MBH/MSoliton = {RatioBU:.4f}, Part 1')
-            GMin,GMax = BHGuess(RatioBU)
-            s, BHMass = BHRatioTester(RatioBU,30,1e-6,GMin,GMax,a)
-            print(f'Generating profile for Soliton with MBH/MSoliton = {RatioBU:.4f}, Part 2')
-            SolitonProfile(BHMass,s,a,not Draft)
-        print('==============================================================================')
 
-        delta_xL, prealphaL, betaL,CutOff = LoadSolitonConfig(RatioBU)
+            delta_xL, prealphaL, betaL,CutOff = LoadSolitonConfig(RatioBU)
 
-        # L stands for Local, as in it's only used once.
-        fL = LoadSoliton(RatioBU)
+            # L stands for Local, as in it's only used once.
+            fL = LoadSoliton(RatioBU)
 
-        printU(f"Loaded embedded soliton {EI} with BH-Soliton mass ratio {RatioBU:.4f}.", 'Init')
+            printU(f"Loaded embedded soliton {EI} with BH-Soliton mass ratio {RatioBU:.4f}.", 'Init')
 
-        mass = convert(emb[0], s_mass_unit, 'm')*(1-Ratio)
-        position = convert(np.array(emb[1]), s_position_unit, 'l')
-        velocity = convert(np.array(emb[2]), s_velocity_unit, 'v')
+            mass = convert(emb[0], s_mass_unit, 'm')*(1-Ratio)
+            position = convert(np.array(emb[1]), s_position_unit, 'l')
+            velocity = convert(np.array(emb[2]), s_velocity_unit, 'v')
 
-        # Note that alpha and beta parameters are computed when the initial_f.npy soliton profile file is generated.
+            # Note that alpha and beta parameters are computed when the initial_f.npy soliton profile file is generated.
 
-        alphaL = (mass / prealphaL) ** 2
+            alphaL = (mass / prealphaL) ** 2
 
-        phase = emb[4]
+            phase = emb[4]
 
-        funct = initsoliton_jit(funct, xarray, yarray, zarray, position, alphaL, fL, delta_xL)
+            funct = initsoliton_jit(funct, xarray, yarray, zarray, position, alphaL, fL, delta_xL)
 
-        if(np.isnan(funct).any()):
-            print('Something is seriously wrong!')
-            raise RuntimeError('Duh')
-        ####### Impart velocity to solitons in Galilean invariant way
-        velx = velocity[0]
-        vely = velocity[1]
-        velz = velocity[2]
-        funct = ne.evaluate("exp(1j*(alphaL*betaL*t0 + velx*xarray + vely*yarray + velz*zarray -0.5*(velx*velx+vely*vely+velz*velz)*t0  + phase))*funct")
-        psi = ne.evaluate("psi + funct")
-        EI += 1 # For displaying.
+            if(np.isnan(funct).any()):
+                print('Something is seriously wrong!')
+                raise RuntimeError('Duh')
+            ####### Impart velocity to solitons in Galilean invariant way
+            velx = velocity[0]
+            vely = velocity[1]
+            velz = velocity[2]
+            funct = ne.evaluate("exp(1j*(alphaL*betaL*t0 + velx*xarray + vely*yarray + velz*zarray -0.5*(velx*velx+vely*vely+velz*velz)*t0  + phase))*funct")
+            psi = ne.evaluate("psi + funct")
 
-    if solitons != []:
-        printU(f"Loaded unperturbed soliton.",'Init')
-        f = LoadDefaultSoliton()
+            EI += 1 # For displaying.
 
-    for s in solitons:
-        mass = convert(s[0], s_mass_unit, 'm')
-        position = convert(np.array(s[1]), s_position_unit, 'l')
-        velocity = convert(np.array(s[2]), s_velocity_unit, 'v')
-        # Note that alpha and beta parameters are computed when the initial_f.npy soliton profile file is generated.
-        alpha = (mass / 3.883) ** 2
-        beta = 2.454
-        phase = s[3]
-        funct = initsoliton_jit(funct, xarray, yarray, zarray, position, alpha, f, delta_x)
-        ####### Impart velocity to solitons in Galilean invariant way
-        velx = velocity[0]
-        vely = velocity[1]
-        velz = velocity[2]
-        funct = ne.evaluate("exp(1j*(alpha*beta*t0 + velx*xarray + vely*yarray + velz*zarray -0.5*(velx*velx+vely*vely+velz*velz)*t0  + phase))*funct")
-        psi = ne.evaluate("psi + funct")
+        if solitons != []:
+
+            printU(f"Loaded unperturbed soliton.",'Init')
+            f = LoadDefaultSoliton()
+
+        for s in solitons:
+            mass = convert(s[0], s_mass_unit, 'm')
+            position = convert(np.array(s[1]), s_position_unit, 'l')
+            velocity = convert(np.array(s[2]), s_velocity_unit, 'v')
+            # Note that alpha and beta parameters are computed when the initial_f.npy soliton profile file is generated.
+            alpha = (mass / 3.883) ** 2
+            beta = 2.454
+            phase = s[3]
+            funct = initsoliton_jit(funct, xarray, yarray, zarray, position, alpha, f, delta_x)
+            ####### Impart velocity to solitons in Galilean invariant way
+            velx = velocity[0]
+            vely = velocity[1]
+            velz = velocity[2]
+            funct = ne.evaluate("exp(1j*(alpha*beta*t0 + velx*xarray + vely*yarray + velz*zarray -0.5*(velx*velx+vely*vely+velz*velz)*t0  + phase))*funct")
+            psi = ne.evaluate("psi + funct")
 
     if UseInit:
-
+        
         if np.abs(InitWeight - 0.5) <= 0.5:
 
             psi = psi*(1-InitWeight) + psiEx*InitWeight
@@ -1896,7 +1996,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         elif InitWeight == -1:
             PhaseEx = np.angle(psiEx)
             psi = ne.evaluate("psi*exp(1j*PhaseEx)")
-
+        
 
     fft_psi = pyfftw.builders.fftn(psi, axes=(0, 1, 2), threads=num_threads)
     
@@ -2122,13 +2222,10 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         
     ##########################################################################################
     # PRE-LOOP SAVE I.E. INITIAL CONFIG
-    save_grid(
-        rho, psi, resol, 
-        TMState, phiSP, phi, GradientLog,
-        save_options,
-        save_format,
-        loc, -1, 1
-        )
+    save_grid(rho, psi, resol, TMState, phiSP,
+            save_options,
+            npy, npz, hdf5,
+            loc, -1, 1, GradientLog)
     
     tBegin = time.time()
     
@@ -2160,7 +2257,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     # LOOP NOW BEGINS
     if Silent:
         clear_output()
-    print(f"{D_version}\nExternal Message: {Message}")
+    print(f"{D_version}: {Message}")
     printU(f"Simulation name is {loc}",'Runtime')
     printU(f"{resol} Resolution for {duration:.4g}{duration_units}",'Runtime')
     printU(f"Simulation Started at {tBeginDisp}.",'Runtime')
@@ -2279,14 +2376,13 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         
             egpcmMlist.append(EGPCM)
             EGPCM = 0
-            
+                        
             save_grid(
-                rho, psi, resol, 
-                TMState, phiSP, phi, GradientLog,
-                save_options,
-                save_format,
-                loc, ix, its_per_save
-                )
+                    rho, psi, resol, TMState, phiSP,
+                    save_options,
+                    npy, npz, hdf5,
+                    loc, ix, its_per_save, GradientLog,
+            )
             
             GridMass.append(Vcell*np.sum(rho))
             np.save(os.path.join(os.path.expanduser(loc), "Outputs/ULDMass.npy"), GridMass)
@@ -2359,9 +2455,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
 ################################################################################
 ################################################################################
 
-def SSEst(SO, save_number, resol):
-    
-    save_options = SaveOptionsDigest(SO)
+def SSEst(save_options, save_number, resol):
     
     save_rho = save_options[0]
     
@@ -2467,7 +2561,7 @@ def Load_Latest(save_path):
 
     
 def Load_Data(save_path,ts,save_options,save_number):
-
+    
     data = []
     TMdata = []
     phidata = []
@@ -2544,44 +2638,6 @@ def Load_Data(save_path,ts,save_options,save_number):
         
     print("ULHelper: Loaded", EndNum, "Data Entries")
     return EndNum, data,  TMdata, phidata,    graddata, phasedata
-
-
-def Load_npys(loc,save_options):
-    
-    SaveWordList = SaveOptionsCompile(save_options).split()
-    if save_options[0] or save_options[1] or save_options[6] or save_options[12]: 
-        printU('3D saves are not automatically loaded. Please load them manually.','IO')
-    
-    Out = {}
-    
-    for Word in SaveWordList:
-        if (Word != 'Energy') and (Word != 'Entropy'): 
-            Out[Word] = []
-        
-    import time   
-    import warnings 
-    warnings.filterwarnings("ignore")
-
-    EndNum = 0
-    
-    SaveWordList = SaveOptionsCompile(save_options).split()
-
-    x = 0
-    success = True
-
-    while success:
-        
-        try:
-            for Word in SaveWordList:
-                if (Word != 'Energy') and (Word != 'Entropy'): 
-                    Out[Word].append(IOLoad_npy(loc,Word,x))        
-            x += 1
-        
-        except FileNotFoundError:
-            success = False
-
-    printU(f"Loaded {x} Data Entries",'LoadNPY')
-    return x, Out
 
 
 def SmoothingReport(a,resol,clength,B = 0):
@@ -2724,12 +2780,8 @@ def SaveOptionsCompile(save_options):
     return result
 
 def SaveOptionsDigest(OptionsText):
-    
     save_options = np.zeros(len(SaveFlags), dtype = bool)
     
-    if OptionsText == 'Minimum':
-        OptionsText = 'Energy 1Density NBody DF Entropy'
-
     OList = OptionsText.split()
     
     for Word in OList:
@@ -2737,7 +2789,7 @@ def SaveOptionsDigest(OptionsText):
     
     return save_options.tolist()
  
-def GenerateConfig(NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_path, save_format, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles,embeds, Uniform,Density,density_unit,a,B,UVel,NoInteraction = False,Name = ''
+def GenerateConfig(NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_path, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles,embeds, Uniform,Density,density_unit,a,B,UVel,NoInteraction = False,Name = ''
            ):
 
     tm = GenFromTime()
@@ -2790,21 +2842,27 @@ def GenerateConfig(NS, central_mass, length, length_units, resol, duration, dura
                 except FileNotFoundError:
                     print('Using pre-existing config in folder.')
                 
+                
+                
                 return timestamp
 
     Conf_data = {}
 
     Conf_data['PyUL Version'] = S_version
     Conf_data['PyUL Version Descriptor'] = D_version
-    Conf_data['Run Description'] = 'Generated Configuration'
+    Conf_data['Run Description'] = 'Automatically Generated Config'
 
     Conf_data['Config Generation Time'] = tm
+
+    OptionsText = SaveOptionsCompile(save_options)
     
     Conf_data['Save Options'] = ({
-            'Flags': save_options,
+            'Flags': OptionsText,
             'All Supported Flags': SFS,
-            'Number': save_number,
-            'Format': save_format
+            'number': save_number,
+            'npz': npz,
+            'npy': npy,
+            'hdf5': hdf5
             })
 
     Conf_data['Spatial Resolution'] = resol
@@ -2926,13 +2984,14 @@ def LoadConfig(loc):
         except KeyError: # Backwards Compatibility
             save_options = config["Save Options"]["flags"]
 
-        try: 
-            save_format = config["Save Options"]["Format"]
             
-        except KeyError:
-            save_format = 'npy'
+        hdf5 = config["Save Options"]["hdf5"]
         
-        save_number = config["Save Options"]["Number"]
+        npy = config["Save Options"]["npy"]
+        
+        npz = config["Save Options"]["npz"]
+        
+        save_number = config["Save Options"]["number"]
         
         ### Time Stuff
         
@@ -2991,7 +3050,7 @@ def LoadConfig(loc):
         UVel = config["Uniform Field Override"]['Uniform Velocity']
       
          
-        return  NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_format, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, embeds, Uniform,Density, density_unit,a, B, UVel
+        return  NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, embeds, Uniform,Density, density_unit,a, B, UVel
 
 
 
@@ -3115,7 +3174,7 @@ def PopulateBHWithStars(particles,rIn = 0.4, rOut = 1.2,InBias = 0, NStars = 10,
     return particles
 
 
-def SolEst(mass,length,resol,mass_unit = '',length_units = '', Plot = False, Density = 0, density_unit = ''): # Only deals with default solitons!
+def SolEst(mass,length,resol,mass_unit = '',length_units = '', Plot = False): # Only deals with default solitons!
     import matplotlib.pyplot as plt
     
     code_mass = convert(mass,mass_unit,'m')
@@ -3138,17 +3197,12 @@ def SolEst(mass,length,resol,mass_unit = '',length_units = '', Plot = False, Den
         
         else:
             funct[index] = np.nan
-    funct = funct**2
     if Plot:
         plt.plot(rarray,funct,'--')
         plt.xlim([0,code_length/2])
         plt.ylim([0,funct[0]*1.1])
         plt.xlabel('Code Radial Coordinate')
         plt.ylabel('Code Density')
-        
-        if Density != 0:
-            DensityC = convert(Density,density_unit,'d')
-            plt.plot(rarray,0*rarray+DensityC,'--')
     
     try:
         RHWHM = np.where(funct <= funct[0]/2)
@@ -3181,7 +3235,7 @@ def SliceFinderC(TMState,resol,length,verbose = False):
     return RPt
 
 def ParameterScanGenerator(path_to_config,ScanParams,ValuePool,save_path,
-                           SaveSpace = False, KeepResol = True, KeepSmooth = False,
+                           SaveSpace = False, KeepSmooth = False,
                           AdaptiveTime = False):
         
     if len(ScanParams) != len(ValuePool):
@@ -3205,20 +3259,12 @@ def ParameterScanGenerator(path_to_config,ScanParams,ValuePool,save_path,
         
     # Load background parameters from donor config file.
     
-    NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, SO, save_format, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, embeds, Uniform,Density, density_unit,a, B, UVel = LoadConfig(path_to_config)
-    
-    if SaveSpace:
-        save_options = 'Minimal'
-    else:
-        save_options = SaveOptionsCompile(SO)
+    NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, embeds, Uniform,Density, density_unit,a, B, UVel = LoadConfig(path_to_config)
     
     if KeepSmooth:
         resol_old = resol
         a_old = a
-    
-    if KeepResol:
-        RPL = resol/length
-    
+        
     if AdaptiveTime:
         resol_old = resol
         Density_old = Density
@@ -3322,13 +3368,9 @@ def ParameterScanGenerator(path_to_config,ScanParams,ValuePool,save_path,
                 PString = 'TF'
                 
             elif ScanParams[j] == 'Scaling':
-                
-                
             
                 length = lengthOrig * Pool[iDiv]
                 PString = 'SC'
-                
-                resol =  int(RPL * length)
             
             else:
                 raise ValueError('Unrecognized parameter scan value used.')
@@ -3338,7 +3380,7 @@ def ParameterScanGenerator(path_to_config,ScanParams,ValuePool,save_path,
         
         # GenerateConfig Is Done Per i Loop
     
-        GenerateConfig(NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_path, save_format, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles,embeds, Uniform,Density,density_unit,a,B,UVel,True,Str)
+        GenerateConfig(NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_path, npz, npy, hdf5, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles,embeds, Uniform,Density,density_unit,a,B,UVel,True,Str)
         
         print('Generated config file for', Str)
         
@@ -3360,9 +3402,9 @@ def RhoEst(length,length_units,mass,mass_unit):
     
 DensityEstimator = RhoEst
 
-def VizInit2D(length,length_units,resol,embeds,
+def VizInit_P(length,length_units,resol,embeds,
               solitons,s_position_unit, s_mass_unit,
-              particles,m_position_unit, Uniform, Density, UVel):
+              particles,m_position_unit):
     
     print(length_units)
     particles, solitons, embeds = EmbedParticle(particles,embeds,solitons)
@@ -3413,22 +3455,8 @@ def VizInit2D(length,length_units,resol,embeds,
     ax.set_xlabel(f'x / {length_units}')
     ax.set_ylabel(f'y / {length_units}')
     ax.grid()
-    
-    if Uniform:
-        if UVel[1]**2 + UVel[0]**2 != 0:
-            ax.quiver(0.75,0.75,UVel[1],UVel[0])
-        ax.text(0.75,0.75,f'Density: {Density}')
-    
     return fig, ax
 
 # New addition that fixes mesh compatibility
 def XYSwap(Vec):
     return [Vec[1],Vec[0],Vec[2]]
-
-
-class Simulation():
-    
-    def __init__(self,ConfigFile = ''):
-        
-        if ConfigFile == '':
-            self.resol = 128
