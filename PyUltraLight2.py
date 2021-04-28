@@ -103,18 +103,19 @@ def IOLoad_npy(loc,Type,save_num):
 ### AUX. FUNCTION TO GENERATE TIME STAMP
 
 def GenFromTime():
-    
     from datetime import datetime
-
     now = datetime.now() # current date and time
     timestamp = now.strftime("%Y%m%d_%H%M%S")
     
     return timestamp
 
+SSLength = 5
+
+def printU(Message,SubSys = 'Sys'):
+    print(f"{Version}.{SubSys.rjust(SSLength)}: {Message}")
 ####################### AUX. FUNCTION TO GENERATE PROGRESS BAR
-def prog_bar(iteration_number, progress, tinterval,status = '    '):
-    size = 25
-    
+def prog_bar(iteration_number, progress, tinterval,status = '',adtl = ''):
+    size = 20
     ETAStamp = time.time() + (iteration_number - progress)*tinterval
     
     ETA = datetime.fromtimestamp(ETAStamp).strftime("%d/%m/%Y, %H:%M:%S")
@@ -129,12 +130,12 @@ def prog_bar(iteration_number, progress, tinterval,status = '    '):
     if block == size:
         current = 0
     
+    status = f'{status.ljust(SSLength)}'
     
-    text = "\r[{}] {:.0f}% {}{}{} ({}{:.2f}s)".format(
+    text = "\r[{}] {:.0f}% {}{}{} ({}{:.2f}s) {}".format(
         "●" * (block) + "◐" * (current) + "○" * (size - block - current), round(progress * 100, 0),
-        status, 'Expected Finish Time: ',ETA,'Prev. Step: ',tinterval)
-    
-
+        status, 'Exp. Time: ',ETA,'Prev.: ',tinterval,adtl)
+   
     print(f'{text}', end="",flush='true')
 
 
@@ -159,10 +160,7 @@ arxiv.org/abs/1807.04037")
     print(f"==============================================================================")
 
     
-SSLength = 6
 
-def printU(Message,SubSys = 'Sys'):
-    print(f"{Version}.{SubSys.rjust(SSLength)}: {Message}")
 
 
 def ULDStepEst(duration,duration_units,length,length_units,resol,step_factor, save_number = -1):
@@ -1594,9 +1592,6 @@ def ULRead(InitPath):
 def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal = False, UseInit = False, IsoP = False, UseDispSponge = False, SelfGravity = True, NBodyInterp = True, NBodyGravity = True, Silent = False, AutoStop = False, AutoStop2 = False, InitPath = '', InitWeight = 1, Message = ''):
     
     clear_output()
-    
-    if AutoStop2:
-        AutoStop = False
 
     Draft = True
 
@@ -1700,9 +1695,6 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     if AutoStop and Uniform and NumTM == 1:
         print("Integration will automatically halt when test mass stops.")
     
-    if AutoStop2 and Uniform and NumTM == 1:
-        print("Integration will automatically halt when test mass loses 50% of its KE.")
-    
     TIntegrate = 0
     
     TimeWritten = False
@@ -1779,11 +1771,6 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         MassCom = Density*gridlength**3
 
         UVelocity = convert(np.array(UVel),s_velocity_unit, 'v')
-
-        if AutoStop and NumTM == 1:
-            ThresholdVelocity = -1*UVelocity[1]
-        else:
-            ThresholdVelocity = 0
 
         DensityCom = MassCom / resol**3
 
@@ -2049,6 +2036,9 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
                 phiTM = ne.evaluate("phiTM-a*mT/sqrt(1+a**2*distarrayTM**2)")
 
 #if b > 0:
+
+
+
 #
 #
 #        phiTM = phiTM * 1/2*(np.tanh((b-distarrayTM)*Steep)+1)
@@ -2060,6 +2050,11 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         
         if AutoStop and Uniform and len(particles) == 1:
             ThresholdVelocity += Vy
+            
+        if AutoStop and len(particles) == 1:
+            E0 = 1/2 * mT * np.linalg.norm(velocity + UVelocity)**2  
+            if E0 == 0:
+                E0 = 1
             # Always shooting towards the right.
 
     masslist = np.array(masslist)
@@ -2117,9 +2112,6 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     else:
         printU(f'Successfully initiated Wavefunction and NBody Initial Conditions.', 'Init')
 
-        
-        
-        
     ##########################################################################################
     # PRE-LOOP SAVE I.E. INITIAL CONFIG
     save_grid(
@@ -2178,10 +2170,11 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     tint = 0
     
     EGPCM = 0
+    PBEDisp = ''
     #####################################################################################LOOP
     for ix in range(actual_num_steps):
         TIntegrate += h
-        prog_bar(actual_num_steps, ix + 1, tint,' FT ')
+        prog_bar(actual_num_steps, ix + 1, tint,'FT',PBEDisp)
         if HaSt == 1:
             psi = ne.evaluate("exp(-1j*0.5*h*phi)*psi")
             HaSt = 0
@@ -2197,7 +2190,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
 
 
         if UseDispSponge:
-            prog_bar(actual_num_steps, ix + 1, tint,'DS  ')
+            prog_bar(actual_num_steps, ix + 1, tint,'DS',PBEDisp)
             psi *= np.exp(-PreMult*h)
                     
         rho = ne.evaluate("real(abs(psi)**2)")
@@ -2206,10 +2199,9 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         
         phik = ne.evaluate("-4*pi*(phik)/rkarray2")
         
-        phik[0, 0, 0] = 0
+        phik[0, 0, 0] = 0 # Kill the base frequency.
 
-
-        prog_bar(actual_num_steps, ix + 1, tint,'SP  ')
+        prog_bar(actual_num_steps, ix + 1, tint,'SP',PBEDisp)
         # New Green Function Methods
         if not IsoP:
             phiSP = irfft_phi(phik)
@@ -2217,7 +2209,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
             phiSP = IP_jit(rho, green, gridlength, fft_X, ifft_X, fft_plane, ifft_plane)
 
         # FW STEP MAGIC HAPPENS HERE
-        prog_bar(actual_num_steps, ix + 1, tint,'RK4 ')
+        prog_bar(actual_num_steps, ix + 1, tint,'RK4',PBEDisp)
         
         if NBodyInterp:
 
@@ -2256,19 +2248,26 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
                     if (save_options[3]) and ((ix + 1) % its_per_save) == 0:
                         EGPCM += mT*QuickInterpolate(phiSP,gridlength,resol,np.array([TMx,TMy,TMz]))
             
+        if AutoStop and len(particles) == 1:
+            velocity = TMState[3:6]
+            EKDisp = (1/2 * mT * np.linalg.norm(velocity + UVelocity)**2 ) / E0
+            PBEDisp = f'KE~{100*EKDisp:.2f}%'
+            
         if SelfGravity:
             phi = ne.evaluate('phiSP + phiTM')
         else: 
             phi = phiTM
+            
+            
 
-        prog_bar(actual_num_steps, ix + 1, tint,' FT ')
+        prog_bar(actual_num_steps, ix + 1, tint,'FT',PBEDisp)
         #Next if statement ensures that an extra half step is performed at each save point
         if (((ix + 1) % its_per_save) == 0) and HaSt == 0:
             psi = ne.evaluate("exp(-1j*0.5*h*phi)*psi")
             rho = ne.evaluate("real(abs(psi)**2)")
             HaSt = 1
 
-            prog_bar(actual_num_steps, ix + 1, tint,' IO ')
+            prog_bar(actual_num_steps, ix + 1, tint,'IO',PBEDisp)
             #Next block calculates the energies at each save, not at each timestep.
             if (save_options[3]):
                 calculate_energies(rho, Vcell, phiSP,phiTM, psi, karray2, fft_psi, ifft_funct, Density,Uniform, egpcmlist, egpsilist, ekandqlist, egylist, mtotlist)
@@ -2328,7 +2327,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
 
         tint = time.time() - tinit
         tinit = time.time()
-        prog_bar(actual_num_steps, ix + 1, tint,'')
+        prog_bar(actual_num_steps, ix + 1, tint,'',PBEDisp)
 
     ################################################################################
     # LOOP ENDS
@@ -2520,19 +2519,19 @@ def Load_Data(save_path,ts,save_options,save_number):
     
         try:
             if save_plane:
-                data.append(np.load('{}{}{}{}'.format(loc, '/Outputs/plane_#', x, '.npy')))
+                data.append(np.load('{}{}{:03d}{}'.format(loc, '/Outputs/R2D_#', x, '.npy')))
             if save_testmass:
 
-                TMdata.append(np.load('{}{}{}{}'.format(loc, '/Outputs/TM_#', x, '.npy')))
+                TMdata.append(np.load('{}{}{:03d}{}'.format(loc, '/Outputs/NTM_#', x, '.npy')))
             if save_phi_plane:
 
-                phidata.append(np.load('{}{}{}{}'.format(loc, '/Outputs/Field2D_#', x, '.npy')))
+                phidata.append(np.load('{}{}{:03d}{}'.format(loc, '/Outputs/G2D_#', x, '.npy')))
                 
             if save_gradients:
-                graddata.append(np.load('{}{}{}{}'.format(loc, '/Outputs/Gradients_#', x, '.npy')))
+                graddata.append(np.load('{}{}{:03d}{}'.format(loc, '/Outputs/DYF_#', x, '.npy')))
                 
             if save_phase_plane:
-                phasedata.append(np.load('{}{}{}{}'.format(loc, '/Outputs/Arg2D_#', x, '.npy')))
+                phasedata.append(np.load('{}{}{:03d}{}'.format(loc, '/Outputs/A2D_#', x, '.npy')))
             
             EndNum += 1
         
@@ -2796,8 +2795,11 @@ def GenerateConfig(NS, central_mass, length, length_units, resol, duration, dura
 
     Conf_data['PyUL Version'] = S_version
     Conf_data['PyUL Version Descriptor'] = D_version
-    Conf_data['Run Description'] = 'Generated Configuration'
-
+    if NoInteraction:
+        Conf_data['Description'] = 'Batch Configuration'
+    else:
+        Conf_data['Description'] = 'Single Run Configuration'
+        
     Conf_data['Config Generation Time'] = tm
     
     Conf_data['Save Options'] = ({
