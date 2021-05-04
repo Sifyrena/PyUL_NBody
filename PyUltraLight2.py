@@ -1,6 +1,6 @@
 Version   = str('PyUL2') # Handle used in console.
-D_version = str('Build 2021 Apr 21') # Detailed Version
-S_version = 20 # Short Version
+D_version = str('Build 2021 May 03') # Detailed Version
+S_version = 20.3 # Short Version
 
 import time
 from datetime import datetime
@@ -142,26 +142,25 @@ def prog_bar(iteration_number, progress, tinterval,status = '',adtl = ''):
 ####################### Credits Information
 def PyULCredits(IsoP = False,UseDispSponge = False,embeds = []):
     print(f"==============================================================================")
-    print(f"{Version}.{S_version}: (c) 2020 - 2021 Y. Wang and collaborators. \nAuckland Cosmology Group\n") 
+    print(f"{Version}.{S_version}: (c) 2020 - 2021 Wang., Y. and collaborators. \nAuckland Cosmology Group\n") 
     print("Original PyUltraLight Team:\nEdwards, F., Kendall, E., Hotchkiss, S. & Easther, R.\n\
 arxiv.org/abs/1807.04037")
     
     if IsoP or UseDispSponge or (embeds != []):
         print(f"\n================== External Module In Use ================== \n")
+    
     if IsoP:
-        print(f"Isolated ULDM Potential Implementation \nAdapted from J. L. Zagorac et al. Yale Cosmology \n")
+        printU(f"Isolated ULDM Potential Implementation \nAdapted from J. L. Zagorac et al. Yale Cosmology \n",'External')
         
     if UseDispSponge:
-        print(f"Dispersive Sponge Condition \nAdapted from J. L. Zagorac et al. Yale Cosmology \n")
+        printU(f"Dispersive Sponge Condition \nAdapted from J. L. Zagorac et al. Yale Cosmology \n",'External')
         
     if embeds != []:
-        print(f"Embedded Soliton Profiles \nAdapted from N. Guo et al. Auckland Cosmology Group \n")
+        printU(f"Embedded Soliton Profiles \nAdapted from N. Guo et al. Auckland Cosmology Group \n",'External')
 
     print(f"==============================================================================")
 
     
-
-
 
 def ULDStepEst(duration,duration_units,length,length_units,resol,step_factor, save_number = -1):
     
@@ -1589,7 +1588,7 @@ def ULRead(InitPath):
     
     return psi
 
-def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal = False, UseInit = False, IsoP = False, UseDispSponge = False, SelfGravity = True, NBodyInterp = True, NBodyGravity = True, Silent = False, AutoStop = False, AutoStop2 = False, InitPath = '', InitWeight = 1, Message = ''):
+def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal = False, UseInit = False, IsoP = False, UseDispSponge = False, SelfGravity = True, NBodyInterp = True, NBodyGravity = True, Silent = False, AutoStop = False, AutoStop2 = False, WellThreshold = 100, InitPath = '', InitWeight = 1, Message = ''):
     
     clear_output()
 
@@ -1694,6 +1693,9 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     
     if AutoStop and Uniform and NumTM == 1:
         print("Integration will automatically halt when test mass stops.")
+        
+    if AutoStop2:
+        print(f"Integration will automatically halt when lowest potential exceeds {WellThreshold}x N body initial.")
     
     TIntegrate = 0
     
@@ -2035,14 +2037,6 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
             else:
                 phiTM = ne.evaluate("phiTM-a*mT/sqrt(1+a**2*distarrayTM**2)")
 
-#if b > 0:
-
-
-
-#
-#
-#        phiTM = phiTM * 1/2*(np.tanh((b-distarrayTM)*Steep)+1)
-        
         
         if (save_options[3]):
             EGPCM += mT*QuickInterpolate(phiSP,gridlength,resol,np.array([TMx,TMy,TMz]))
@@ -2061,7 +2055,13 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     TMState = np.array(TMState)
     TMState = TMState.flatten(order='C')
     
-    if not NBodyGravity:
+    if NBodyGravity:
+        if AutoStop2:
+            if a == 0:
+                phiRef = np.min(phiTM) * WellThreshold # Empirical for now
+            else:
+                phiRef = - a * np.max(masslist) * WellThreshold
+    else:    
         phiTM *= 0
     
     if SelfGravity:
@@ -2160,8 +2160,10 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     HaSt = 1  # 1 for a half step 0 for a full step
 
     tenth = float(save_number/10) #This parameter is used if energy outputs are saved while code is running.
-
-    printU(f"Taking {int(actual_num_steps)} DM simulation steps @ {save_number} Snapshots", 'Runtime')
+    if actual_num_steps == save_number:
+        printU(f"Taking {int(actual_num_steps)} ULDM steps", 'Runtime')
+    else:
+        printU(f"Taking {int(actual_num_steps)} ULDM steps @ {save_number} snapshots", 'Runtime')
     
     if warn == 1:
         print("WARNING: Detected significant overlap between solitons in I.V.")
@@ -2321,6 +2323,14 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
                     file.write(f"{TIntegrate}")
                     file.close()
                     TimeWritten = True
+                    
+        if AutoStop2:
+            if np.min(phi) < phiRef:
+                print('\n')
+                printU('Gravitational field runaway threshold reached!','Consistency')
+                print(f'\nSimulation Concluded at step {ix}!')
+                break
+                
 
         ################################################################################
         # UPDATE INFORMATION FOR PROGRESS BAR
@@ -2343,7 +2353,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     minutes = Time // 60
     Time %= 60
     seconds = Time
-
+    print('\n')
     printU(f"Run Complete. Time Elapsed (d:h:m:s): {day:.0f}:{hour:.0f}:{minutes:.0f}:{seconds:.2f}",'Runtime')
     if DumpFinal:
         printU(f'Dumped final state to file.','IO')
@@ -2545,13 +2555,31 @@ def Load_Data(save_path,ts,save_options,save_number):
     return EndNum, data,  TMdata, phidata,    graddata, phasedata
 
 
-def Load_npys(loc,save_options):
+def Load_npys(loc,save_options, LowMem = False):
     
-    SaveWordList = SaveOptionsCompile(save_options).split()
+
+    
     if save_options[0] or save_options[1] or save_options[6] or save_options[12]: 
         printU('3D saves are not automatically loaded. Please load them manually.','IO')
+        save_options[0] = False
+        save_options[1] = False
+        save_options[6] = False
+        save_options[12] = False
+    
+    if LowMem:
+        printU('Skipping 2D data. Please load them manually.','IO')
+        save_options[2] = False
+        save_options[7] = False
+        save_options[13] = False
+    
+    
+    SaveWordList = SaveOptionsCompile(save_options).split()
     
     Out = {}
+    
+    Out['Directory'] = loc
+    
+    
     
     for Word in SaveWordList:
         if (Word != 'Energy') and (Word != 'Entropy'): 
@@ -2563,8 +2591,6 @@ def Load_npys(loc,save_options):
 
     EndNum = 0
     
-    SaveWordList = SaveOptionsCompile(save_options).split()
-
     x = 0
     success = True
 
@@ -3187,11 +3213,11 @@ def ParameterScanGenerator(path_to_config,ScanParams,ValuePool,save_path,
                           AdaptiveTime = False):
         
     if len(ScanParams) != len(ValuePool):
-        raise ValueError ('Did not specify the correct number of variable pools to scan over!')
+        raise ValueError ('You did not specify the correct number of variable pools to scan over!')
         
     else:
 
-        print(f'Automated scan will be performed over {len(ScanParams)} parameters.')
+        printU(f'Automated scan will be performed over {len(ScanParams)} parameters.','ParamScan')
         
     Product = 1
     
@@ -3262,9 +3288,13 @@ def ParameterScanGenerator(path_to_config,ScanParams,ValuePool,save_path,
             Units.append('')
             
             lengthOrig = length
+            
+        elif ScanP == 'Smoothing':
+            KeepSmooth = False
+            Units.append('')
 
         else:
-            raise ValueError('Unrecognized parameter scan value used.')
+            raise ValueError('Unrecognized parameter type used.')
     
     for i in range(Product):
 
@@ -3291,7 +3321,7 @@ def ParameterScanGenerator(path_to_config,ScanParams,ValuePool,save_path,
             if ScanParams[j] == 'Density':
                 
                 Density = Pool[iDiv]  
-                PString = 'DS'
+                PString = 'D'
                 
 
             elif ScanParams[j] == 'Resolution':
@@ -3301,42 +3331,44 @@ def ParameterScanGenerator(path_to_config,ScanParams,ValuePool,save_path,
                 if KeepSmooth:
                     a = a_old * (resol)/(resol_old)
                 
-                PString = 'RS'
+                PString = 'R'
             
             elif ScanParams[j] == 'TM_Mass':
                 
                 particles[0][0] = Pool[iDiv]   
-                PString = 'TM'
+                PString = 'M'
             
             elif ScanParams[j] == 'TM_vY':
                 
                 particles[0][2][1] = Pool[iDiv]
-                PString = 'TV'
+                PString = 'V'
                 
             elif ScanParams[j] == 'UVelY':
                 
                 UVel[1] = Pool[iDiv]  
-                PString = 'QV'
+                PString = 'U'
                 
             elif ScanParams[j] == 'Step_Factor':
                 
                 step_factor = Pool[iDiv]
-                PString = 'TF'
+                PString = 'F'
                 
             elif ScanParams[j] == 'Scaling':
                 
-                
-            
                 length = lengthOrig * Pool[iDiv]
-                PString = 'SC'
+                PString = 'S'
                 
                 resol =  int(RPL * length)
             
+            elif ScanParams[j] == 'Smoothing':
+                a = Pool[iDiv]
+                PString = 'A'
+            
             else:
-                raise ValueError('Unrecognized parameter scan value used.')
+                raise ValueError('Unrecognized parameter type used.')
             
             
-            Str += f'-{PString}{iDiv+1:02d}'
+            Str += f'_{PString}{iDiv+1:02d}'
         
         # GenerateConfig Is Done Per i Loop
     
