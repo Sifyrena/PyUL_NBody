@@ -1,21 +1,19 @@
 {
-    "PyUL Version": 19.4,
-    "PyUL Version Descriptor": "Build 2021 Apr 15",
-    "Run Description": "Automatically Generated Config",
-    "Config Generation Time": "20210415_012641",
+    "PyUL Version": 21.0,
+    "PyUL Version Descriptor": "Build 2021 May 05",
+    "Description": "Base File For Run Configuration",
+    "Config Generation Time": "20210509_215445",
     "Save Options": {
-        "Flags": "Energy NBody DF Entropy 1Density ",
-        "All Supported Flags": "3Density 3Wfn 2Density Energy 1Density NBody 3Grav 2Grav DF 2Phase Entropy",
-        "number": -1,
-        "npz": false,
-        "npy": true,
-        "hdf5": false
+        "Flags": "Energy 1Density NBody 1Grav DF Entropy 1GravF",
+        "All Supported Flags": "3Density 3Wfn 2Density Energy 1Density NBody 3Grav 2Grav DF 2Phase Entropy 1Grav 3GravF 2GravF 1GravF",
+        "Number": -1,
+        "Format": "npy"
     },
     "Spatial Resolution": 128,
-    "Temporal Step Factor": 0.5,
-    "RK Steps": 36,
+    "Temporal Step Factor": 1,
+    "RK Steps": 64,
     "Duration": {
-        "Time Duration": 14,
+        "Time Duration": 32,
         "Start Time": 0.0,
         "Time Units": "Myr"
     },
@@ -33,10 +31,10 @@
     "Matter Particles": {
         "Condition": [
             [
-                100,
+                10,
                 [
                     0,
-                    0,
+                    -4.817380715879075,
                     0
                 ],
                 [
@@ -51,12 +49,12 @@
         "Velocity Units": "km/s"
     },
     "Central Mass": 0,
-    "Field Smoothing": 200,
+    "Field Smoothing": 882.9,
     "NBody Cutoff Factor": 0,
     "Uniform Field Override": {
         "Flag": true,
-        "Density Unit": "",
-        "Density Value": 3000000.0,
+        "Density Unit": "Crit",
+        "Density Value": 10000000.0,
         "Uniform Velocity": [
             0,
             0,

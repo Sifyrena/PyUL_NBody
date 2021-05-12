@@ -1,0 +1,64 @@
+{
+    "PyUL Version": 21.0,
+    "PyUL Version Descriptor": "Build 2021 May 05",
+    "Description": "Base File For Run Configuration",
+    "Config Generation Time": "20210509_215445",
+    "Save Options": {
+        "Flags": "Energy 1Density NBody 1Grav DF Entropy 1GravF",
+        "All Supported Flags": "3Density 3Wfn 2Density Energy 1Density NBody 3Grav 2Grav DF 2Phase Entropy 1Grav 3GravF 2GravF 1GravF",
+        "Number": -1,
+        "Format": "npy"
+    },
+    "Spatial Resolution": 128,
+    "Temporal Step Factor": 1,
+    "RK Steps": 64,
+    "Duration": {
+        "Time Duration": 32,
+        "Start Time": 0.0,
+        "Time Units": "Myr"
+    },
+    "Simulation Box": {
+        "Box Length": 19.2695228635163,
+        "Length Units": "kpc"
+    },
+    "ULDM Solitons": {
+        "Condition": [],
+        "Embedded": [],
+        "Mass Units": "",
+        "Position Units": "kpc",
+        "Velocity Units": "km/s"
+    },
+    "Matter Particles": {
+        "Condition": [
+            [
+                10,
+                [
+                    0,
+                    4.817380715879075,
+                    0
+                ],
+                [
+                    0,
+                    0,
+                    0
+                ]
+            ]
+        ],
+        "Mass Units": "M_solar_masses",
+        "Position Units": "kpc",
+        "Velocity Units": "km/s"
+    },
+    "Central Mass": 0,
+    "Field Smoothing": 882.9,
+    "NBody Cutoff Factor": 0,
+    "Uniform Field Override": {
+        "Flag": true,
+        "Density Unit": "Crit",
+        "Density Value": 10000000.0,
+        "Uniform Velocity": [
+            0,
+            -100,
+            0
+        ]
+    }
+}

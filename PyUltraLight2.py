@@ -1,34 +1,24 @@
 Version   = str('PyUL2') # Handle used in console.
-D_version = str('Build 2021 May 03') # Detailed Version
-S_version = 20.3 # Short Version
+D_version = str('Build 2021 May 05') # Detailed Version
+S_version = 21.1 # Short Version
 
+# Housekeeping
 import time
 from datetime import datetime
 import sys
-import numpy as np
-import numexpr as ne
-import numba
-
-import pyfftw
-import h5py
 import os
-import scipy.fft
 import multiprocessing
 import json
 
-import scipy.integrate as si
+# Core Maths
+import numpy as np
+import numexpr as ne
+import numba
+import pyfftw
 
-from scipy.interpolate import RegularGridInterpolator as RPI
-
-# For Jupyter
+# Jupyter
 from IPython.core.display import clear_output
 
-try:
-    import scipy.special.lambertw as LW
-except ModuleNotFoundError:
-    def LW(a):
-        return -0.15859433956303937
-    
 num_threads = multiprocessing.cpu_count()
 
 pi = np.pi
@@ -90,6 +80,7 @@ def IOSave(loc,Type,save_num,save_format = 'npy',data = []):
     elif save_format == 'npz':
         np.savez(file_name,data)
     elif save_format == 'hdf5':
+        import h5py
         f = h5py.File(file_name, 'w')
         dset = f.create_dataset("init", data=data)
         f.close()
@@ -115,25 +106,45 @@ def printU(Message,SubSys = 'Sys'):
     print(f"{Version}.{SubSys.rjust(SSLength)}: {Message}")
 ####################### AUX. FUNCTION TO GENERATE PROGRESS BAR
 def prog_bar(iteration_number, progress, tinterval,status = '',adtl = ''):
-    size = 20
+    size = 12
     ETAStamp = time.time() + (iteration_number - progress)*tinterval
     
     ETA = datetime.fromtimestamp(ETAStamp).strftime("%d/%m/%Y, %H:%M:%S")
     
-    progress = float(progress) / float(iteration_number)
+    PROG = float(progress) / float(iteration_number)
     
-    if progress >= 1.:
-        progress, status = 1, ""
+    if PROG >= 1.:
+        PROG, status = 1, ""
     
-    block = int(round(size * progress))
-    current = 1
-    if block == size:
-        current = 0
+    block = int(round((size) * PROG))
     
     status = f'{status.ljust(SSLength)}'
+  
+    if block == 0:
+        CM = '◎'
+        PM = ''
+        PL = 0
+    else:
+        CM = '●'
+        PM = '◎' 
+        PL = 1
     
-    text = "\r[{}] {:.0f}% {}{}{} ({}{:.2f}s) {}".format(
-        "●" * (block) + "◐" * (current) + "○" * (size - block - current), round(progress * 100, 0),
+    if block == size:
+        PM = CM
+        
+    CL = 2*block - 2*PL + 1
+    
+    LL = size - block
+    RL = size - block
+
+    BarText = "○" * LL + PM * PL + CM * CL + PM * PL + "○" * RL
+    
+    shift = int(-1 * progress % (2*size+1))
+
+    BarText = BarText[shift:-1] + BarText[0:shift]
+    
+    text = "\r[{}] {:.0f}% {}{}{} ({}{:.2f}s) {}".format(BarText
+        , round(PROG * 100, 0),
         status, 'Exp. Time: ',ETA,'Prev.: ',tinterval,adtl)
    
     print(f'{text}', end="",flush='true')
@@ -147,16 +158,16 @@ def PyULCredits(IsoP = False,UseDispSponge = False,embeds = []):
 arxiv.org/abs/1807.04037")
     
     if IsoP or UseDispSponge or (embeds != []):
-        print(f"\n================== External Module In Use ================== \n")
+        print(f"\n**External Module In Use**")
     
     if IsoP:
-        printU(f"Isolated ULDM Potential Implementation \nAdapted from J. L. Zagorac et al. Yale Cosmology \n",'External')
+        printU(f"Isolated ULDM Potential Implementation \nAdapted from J. L. Zagorac et al. Yale Cosmology",'External')
         
     if UseDispSponge:
-        printU(f"Dispersive Sponge Condition \nAdapted from J. L. Zagorac et al. Yale Cosmology \n",'External')
+        printU(f"Dispersive Sponge Condition \nAdapted from J. L. Zagorac et al. Yale Cosmology",'External')
         
     if embeds != []:
-        printU(f"Embedded Soliton Profiles \nAdapted from N. Guo et al. Auckland Cosmology Group \n",'External')
+        printU(f"Embedded Soliton Profiles \nAdapted from N. Guo et al. Auckland Cosmology Group",'External')
 
     print(f"==============================================================================")
 
@@ -164,11 +175,11 @@ arxiv.org/abs/1807.04037")
 
 def ULDStepEst(duration,duration_units,length,length_units,resol,step_factor, save_number = -1):
     
-    gridlength = convert(length, length_units, 'l')
+    lengthC = convert(length, length_units, 'l')
  
     t = convert(duration, duration_units, 't')
     
-    delta_t = (gridlength/float(resol))**2/np.pi
+    delta_t = (lengthC/float(resol))**2/np.pi
 
     min_num_steps = np.ceil(t / delta_t)
     MinUS = int(min_num_steps//step_factor)
@@ -227,7 +238,7 @@ def makeDCTGreen(n):
     arr = safeInverse3D(arr)
     arr[0,0,0] = 3*np.log(np.sqrt(3) + 2) - np.pi/2 #calculated in https://arxiv.org/pdf/chem-ph/9508002.pdf
     # no normalization below matches un-normalization in Mathematica
-    
+    import scipy.fft
     with scipy.fft.set_workers(num_threads):
         green =  scipy.fft.dctn(arr, type = 1, norm = None)
     return(green)
@@ -354,7 +365,9 @@ def convert(value, unit, type):
         elif (unit == 'Crit'):
             converted = value / omega_m0 
         elif (unit == 'MSol/pc3'):
-            converted = value * solar_mass / mass_unit * length_unit**3 / parsec**3
+            converted = value * solar_mass / mass_unit * length_unit**3 / parsec**3     
+        elif (unit == 'MMSol/kpc3'):
+            converted = value * solar_mass / mass_unit * length_unit**3 / parsec**3  / 1000  
         elif (unit == 'kg/m3'):
             converted = value / mass_unit * length_unit**3
         else:
@@ -439,6 +452,8 @@ def convert_back(value, unit, type):
             converted = value * omega_m0 
         elif (unit == 'MSol/pc3'):
             converted = value / solar_mass * mass_unit / length_unit**3 * parsec**3
+        elif (unit == 'MMSol/kpc3'):
+            converted = value / solar_mass * mass_unit / length_unit**3 * parsec**3 * 1000
         elif (unit == 'kg/m3'):
             converted = value * mass_unit / length_unit**3
         else:
@@ -573,17 +588,21 @@ def save_grid(
             
 def calculate_energies(rho, Vcell, phiSP,phiTM, psi, karray2, fft_psi, ifft_funct, Density,Uniform, egpcmlist, egpsilist, ekandqlist, egylist, mtotlist):
 
-
-    BoxAvg = np.mean(rho) # Mean Value in Box
+    rho = rho.real
+    
+    if Uniform:
+        BoxAvg = np.mean(rho) # TEMPORARILY DISABLED!
+    else:
+        BoxAvg = 0
 
     # Gravitational potential energy density associated with the point masses potential
 
-    ETM = ne.evaluate('real(phiTM*(rho-BoxAvg))') # Interaction in particle potential!.
+    ETM = ne.evaluate('phiTM*(rho-BoxAvg)') # Interaction in particle potential!
     ETMtot = Vcell * np.sum(ETM)
     egpcmlist.append(ETMtot) # TM Saved.
 
     # Gravitational potential energy density of self-interaction of the condensate
-    ESI = ne.evaluate('real(0.5*(phiSP)*rho)') # New!
+    ESI = ne.evaluate('0.5*(phiSP)*(rho-BoxAvg)') # New!
     ESItot = Vcell * np.sum(ESI)
     egpsilist.append(ESItot)
     
@@ -606,30 +625,34 @@ def calculate_energies(rho, Vcell, phiSP,phiTM, psi, karray2, fft_psi, ifft_func
     Mtot = np.sum(rho)*Vcell
     mtotlist.append(Mtot)
 
+# CALCULATE_ENERGIES_F, NEW VERSION IN 2.20
+
+# Evaluating ∫ ∫ ∫ H d^3x using one higher order!
+
 
 ### Toroid or something
         
-def Wrap(TMx, TMy, TMz, gridlength):
+def Wrap(TMx, TMy, TMz, lengthC):
     
-    if TMx > gridlength/2:
-        TMx = TMx - gridlength
+    if TMx > lengthC/2:
+        TMx = TMx - lengthC
         
-    if TMx < -gridlength/2:
-        TMx = TMx + gridlength
+    if TMx < -lengthC/2:
+        TMx = TMx + lengthC
         
         
-    if TMy > gridlength/2:
-        TMy = TMy - gridlength
+    if TMy > lengthC/2:
+        TMy = TMy - lengthC
     
-    if TMy < -gridlength/2:
-        TMy = TMy + gridlength
+    if TMy < -lengthC/2:
+        TMy = TMy + lengthC
         
         
-    if TMz > gridlength/2:
-        TMz = TMz - gridlength
+    if TMz > lengthC/2:
+        TMz = TMz - lengthC
     
-    if TMz < -gridlength/2:
-        TMz = TMz + gridlength
+    if TMz < -lengthC/2:
+        TMz = TMz + lengthC
         
     return TMx,TMy,TMz
 
@@ -637,10 +660,10 @@ FWrap = Wrap
 
 ### For Immediate Interpolation of Field Energy
 
-def QuickInterpolate(Field,gridlength,resol,position):
+def QuickInterpolate(Field,lengthC,resol,position):
         #Code Position
                 
-        RNum = (position*1/gridlength+1/2)*resol
+        RNum = (position*1/lengthC+1/2)*resol
 
         RPt = np.floor(RNum)
         RRem = RNum - RPt
@@ -692,9 +715,9 @@ def InterpolateLocal(RRem,Input):
     else:
         return Input[1]*RRem + Input[0]*(1-RRem)
 
-def FWNBody(t,TMState,masslist,phiSP,a,gridlength,resol):
+def FWNBody(t,TMState,masslist,phiSP,a,lengthC,resol):
 
-    GridDist = gridlength/resol
+    GridDist = lengthC/resol
     
     dTMdt = 0*TMState
     GradientLog = np.zeros(len(masslist)*3)
@@ -708,7 +731,7 @@ def FWNBody(t,TMState,masslist,phiSP,a,gridlength,resol):
         #X,Y,Z
         poslocal = TMState[Ind:Ind+3]
 
-        RNum = (poslocal*1/gridlength+1/2)*resol
+        RNum = (poslocal*1/lengthC+1/2)*resol
 
         RPt = np.floor(RNum)
         RRem = RNum - RPt
@@ -807,9 +830,9 @@ def FWNBody(t,TMState,masslist,phiSP,a,gridlength,resol):
     return dTMdt, GradientLog
 
 
-def FWNBody_NI(t,TMState,masslist,phiSP,a,gridlength,resol):
+def FWNBody_NI(t,TMState,masslist,phiSP,a,lengthC,resol):
 
-    GridDist = gridlength/resol
+    GridDist = lengthC/resol
     
     dTMdt = 0*TMState
     GradientLog = np.zeros(len(masslist)*3)
@@ -823,7 +846,7 @@ def FWNBody_NI(t,TMState,masslist,phiSP,a,gridlength,resol):
         #X,Y,Z
         poslocal = TMState[Ind:Ind+3]
 
-        RNum = (poslocal*1/gridlength+1/2)*resol
+        RNum = (poslocal*1/lengthC+1/2)*resol
 
         RPt = np.floor(RNum)
         RRem = RNum - RPt
@@ -924,17 +947,17 @@ def FWNBody_NI(t,TMState,masslist,phiSP,a,gridlength,resol):
 FWNBody3 = FWNBody
 FWNBody3_NI = FWNBody_NI
 
-def NBodyAdvance(TMState,h,masslist,phiSP,a,gridlength,resol,NS):
+def NBodyAdvance(TMState,h,masslist,phiSP,a,lengthC,resol,NS):
         #
         if NS == 0: # NBody Dynamics Off
             
-            Step, GradientLog = FWNBody3(0,TMState,masslist,phiSP,a,gridlength,resol)
+            Step, GradientLog = FWNBody3(0,TMState,masslist,phiSP,a,lengthC,resol)
             
             return TMState, GradientLog
         
         if NS == 1:
  
-            Step, GradientLog = FWNBody3(0,TMState,masslist,phiSP,a,gridlength,resol)
+            Step, GradientLog = FWNBody3(0,TMState,masslist,phiSP,a,lengthC,resol)
             TMStateOut = TMState + Step*h
             
             return TMStateOut, GradientLog
@@ -946,10 +969,10 @@ def NBodyAdvance(TMState,h,masslist,phiSP,a,gridlength,resol,NS):
             H = h/NRK
             
             for RKI in range(NRK):
-                TMK1, Trash = FWNBody3(0,TMState,masslist,phiSP,a,gridlength,resol)
-                TMK2, Trash = FWNBody3(0,TMState + H/2*TMK1,masslist,phiSP,a,gridlength,resol)
-                TMK3, Trash = FWNBody3(0,TMState + H/2*TMK2,masslist,phiSP,a,gridlength,resol)
-                TMK4, GradientLog = FWNBody3(0,TMState + H*TMK3,masslist,phiSP,a,gridlength,resol)
+                TMK1, Trash = FWNBody3(0,TMState,masslist,phiSP,a,lengthC,resol)
+                TMK2, Trash = FWNBody3(0,TMState + H/2*TMK1,masslist,phiSP,a,lengthC,resol)
+                TMK3, Trash = FWNBody3(0,TMState + H/2*TMK2,masslist,phiSP,a,lengthC,resol)
+                TMK4, GradientLog = FWNBody3(0,TMState + H*TMK3,masslist,phiSP,a,lengthC,resol)
                 TMState = TMState + H/6*(TMK1+2*TMK2+2*TMK3+TMK4)
                 
             TMStateOut = TMState
@@ -957,17 +980,17 @@ def NBodyAdvance(TMState,h,masslist,phiSP,a,gridlength,resol,NS):
             return TMStateOut, GradientLog
 
 
-def NBodyAdvance_NI(TMState,h,masslist,phiSP,a,gridlength,resol,NS):
+def NBodyAdvance_NI(TMState,h,masslist,phiSP,a,lengthC,resol,NS):
         #
         if NS == 0: # NBody Dynamics Off
             
-            Step, GradientLog = FWNBody3_NI(0,TMState,masslist,phiSP,a,gridlength,resol)
+            Step, GradientLog = FWNBody3_NI(0,TMState,masslist,phiSP,a,lengthC,resol)
             
             return TMState, GradientLog
         
         if NS == 1:
  
-            Step, GradientLog = FWNBody3_NI(0,TMState,masslist,phiSP,a,gridlength,resol)
+            Step, GradientLog = FWNBody3_NI(0,TMState,masslist,phiSP,a,lengthC,resol)
             TMStateOut = TMState + Step*h
             
             return TMStateOut, GradientLog
@@ -979,10 +1002,10 @@ def NBodyAdvance_NI(TMState,h,masslist,phiSP,a,gridlength,resol,NS):
             H = h/NRK
             
             for RKI in range(NRK):
-                TMK1, Trash = FWNBody3_NI(0,TMState,masslist,phiSP,a,gridlength,resol)
-                TMK2, Trash = FWNBody3_NI(0,TMState + H/2*TMK1,masslist,phiSP,a,gridlength,resol)
-                TMK3, Trash = FWNBody3_NI(0,TMState + H/2*TMK2,masslist,phiSP,a,gridlength,resol)
-                TMK4, GradientLog = FWNBody3_NI(0,TMState + H*TMK3,masslist,phiSP,a,gridlength,resol)
+                TMK1, Trash = FWNBody3_NI(0,TMState,masslist,phiSP,a,lengthC,resol)
+                TMK2, Trash = FWNBody3_NI(0,TMState + H/2*TMK1,masslist,phiSP,a,lengthC,resol)
+                TMK3, Trash = FWNBody3_NI(0,TMState + H/2*TMK2,masslist,phiSP,a,lengthC,resol)
+                TMK4, GradientLog = FWNBody3_NI(0,TMState + H*TMK3,masslist,phiSP,a,lengthC,resol)
                 TMState = TMState + H/6*(TMK1+2*TMK2+2*TMK3+TMK4)
             
             TMStateOut = TMState
@@ -1205,7 +1228,7 @@ def BHRatioTester(TargetRatio,Iter,Tol,BHMassGMin,BHMassGMax,Smoo):
 
 
         #Calculate the (dimensionless) mass of the soliton:
-
+        import scipy.integrate as si
         mass = si.simps(intlist,lr)*4*np.pi
 
         # IMPORTANT 
@@ -1241,7 +1264,7 @@ def BHRatioTester(TargetRatio,Iter,Tol,BHMassGMin,BHMassGMax,Smoo):
             
             print("Shooting algorithm failed to converge to given ratio. Type 'Y' to add ten more trials, 'B' to raise the upper bound, or '' to cancel.")
             
-            Response = str(input())
+            Response = input()
             
             if Response == 'Y':
                 Iter += 10
@@ -1458,7 +1481,7 @@ def SolitonProfile(BHMass,s,Smoo,Production):
         fwhm = 2*lr[difflist.index(min(difflist))]
 
         #Calculate the (dimensionless) mass of the soliton:
-
+        import scipy.integrate as si
         mass = si.simps(intlist,lr)*4*np.pi
 
         #Calculate the radius containing 90% of the massin
@@ -1511,7 +1534,7 @@ def SolitonProfile(BHMass,s,Smoo,Production):
         
         np.save(Save_Folder + RATIOName + '.npy', psi_array)
         
-        with open(Save_Folder + RATIOName + '_info.txt', "w+") as outfile:
+        with open(Save_Folder + RATIOName + '_info.uldm', "w+") as outfile:
             json.dump(Profile_Config, outfile,indent=4)
 
     print ('Successfully Initiated Soliton Profile.')
@@ -1522,14 +1545,14 @@ def LoadSolitonConfig(Ratio):
     
     RatioN = f"{Ratio:.4f}"
     
-    FileName = './Soliton Profile Files/Custom/f_'+RatioN+'_Pro_info.txt'
+    FileName = './Soliton Profile Files/Custom/f_'+RatioN+'_Pro_info.uldm'
     
     if os.path.isfile(FileName):
         with open(configfile) as json_file:
             config = json.load(json_file)
             
     else:
-        FileName = './Soliton Profile Files/Custom/f_'+RatioN+'_Dra_info.txt'
+        FileName = './Soliton Profile Files/Custom/f_'+RatioN+'_Dra_info.uldm'
 
     try:
         config = json.load(open(FileName))
@@ -1588,7 +1611,10 @@ def ULRead(InitPath):
     
     return psi
 
-def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal = False, UseInit = False, IsoP = False, UseDispSponge = False, SelfGravity = True, NBodyInterp = True, NBodyGravity = True, Silent = False, AutoStop = False, AutoStop2 = False, WellThreshold = 100, InitPath = '', InitWeight = 1, Message = ''):
+def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal = False, UseInit = False, IsoP = False, UseDispSponge = False, SelfGravity = True, NBodyInterp = True, NBodyGravity = True, Shift = False, Simpson = False, Silent = False, AutoStop = False, AutoStop2 = False, WellThreshold = 100, InitPath = '', InitWeight = 1, Message = ''):
+    
+    if run_folder == "":
+        return
     
     clear_output()
 
@@ -1603,8 +1629,8 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         
     try:
         os.mkdir(str(loc + '/Outputs'))
-    except(FileExistsError):
         
+    except(FileExistsError):
         
         if Silent:
             Protect = 'Y'
@@ -1630,9 +1656,48 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     timestamp = run_folder
 
     
-    file = open('{}{}{}'.format('./', save_path, '/latest.txt'), "w+")
+    file = open('{}{}{}'.format('./', save_path, '/latest.uldm'), "w+")
     file.write(run_folder)
     file.close()
+    
+    
+    PyULConfig = {}
+    
+    PyULConfig["Integrator Version"] = S_version
+
+    PyULConfig["Integration Modifiers"] = ({
+    "Integration Method": Method,
+    "Dispersive Sponge Condition": UseDispSponge,
+    "Reflective Sponge Condition": EdgeClear,
+    "Wrap Back Particles": False,
+    "Shift Particles by Half Grid": Shift,
+    "Use Zero Padded Potential": IsoP,
+    })
+        
+    PyULConfig["Built-in I/O Features"] = ({
+    "Use Precompiled Initial Conditions": {"Flag": UseInit, "Path": InitPath, "Blend": InitWeight},
+    "Dump Final Wavefunction": DumpFinal,
+    "Dump Initial Wavefunction": DumpInit,
+    })
+    
+    PyULConfig["Core System Modifiers"] = ({
+    "Schroedinger-Poisson Self Gravity": SelfGravity,
+    "N body backreaction": NBodyInterp,
+    "N body Mutual Gravitation": True,
+    "N body Projected Gravitation": NBodyGravity,
+    })
+    
+    PyULConfig["Stopping Conditions"] = ({
+    "When N body #0 Stops": AutoStop,
+    "When Field Exceeds Limit": AutoStop2,
+    "Depth Factor" : WellThreshold,
+    })
+    
+    
+    PyULConfig["Misc. Settings"] = ({"Custom Soliton Draft Quallity": Draft})
+    
+    with open(f'./{save_path}/{run_folder}/reproducibility.uldm', "w+") as outfile:
+        json.dump(PyULConfig, outfile,indent=4)
 
     
     NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_format, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, embeds, Uniform,Density, density_unit,a, B, UVel = LoadConfig(loc)
@@ -1646,7 +1711,6 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     printU(f"Using {num_threads} CPU Threads for FFT.",'FFT')
     # External Credits Print
     PyULCredits(IsoP,UseDispSponge,embeds)
-    print(f"{Version}\n")
     # Embedded particles are Pre-compiled into the list.
     
     if not Uniform:
@@ -1658,6 +1722,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         a = 0
     
     printU(f"Loaded Parameters from {loc}",'IO')
+    printU(f"Data to save this run:\n{SaveOptionsCompile(save_options)}",'IO')
 
     NumSol = len(solitons)
     NumTM = len(particles)
@@ -1674,22 +1739,28 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     if EdgeClear:
         print("WARNING: The Wavefunction on the boundary planes will be Auto-Zeroed at every iteration.")
 
-    print('--------------------------Additional Settings---------------------------------')
+    print('==========================Additional Settings=================================')
 
-    if NBodyGravity == False:
-        print(f"Particle gravity OFF.")    
+    if NBodyGravity:
+        print(f"Particle gravity  ON.")    
     else:
-        print(f"Particle gravity  ON.")     
+        print(f"Particle gravity OFF.")     
         
-    if SelfGravity == False:
-        print(f"ULDM self-gravity OFF.")    
+    if SelfGravity:
+        print(f"ULDM self-gravity  ON.")    
     else:
-        print(f"ULDM self-gravity  ON.")
+        print(f"ULDM self-gravity OFF.")
         
-    if NBodyInterp == False:
-        print(f"NBody response to ULDM OFF.")
-    else:
+    if NBodyInterp:
         print(f"NBody response to ULDM  ON.")
+    else:
+        print(f"NBody response to ULDM OFF.")
+    
+    if Shift:
+        print(f"NBody particle shifted down by half-grid in x,y,z directions.")
+        
+    
+    print('==========================Stopping Conditions=================================')
     
     if AutoStop and Uniform and NumTM == 1:
         print("Integration will automatically halt when test mass stops.")
@@ -1708,9 +1779,9 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     ##########################################################################################
     #CONVERT INITIAL CONDITIONS TO CODE UNITS
 
-    gridlength = convert(length, length_units, 'l')
+    lengthC = convert(length, length_units, 'l')
     
-    b = gridlength * B/2
+    b = lengthC * B/2
 
     t = convert(duration, duration_units, 't')
 
@@ -1720,7 +1791,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
 
     Density = convert(Density,density_unit,'d')
     
-    Vcell = (gridlength / float(resol)) ** 3
+    Vcell = (lengthC / float(resol)) ** 3
     
     ne.set_num_threads(num_threads)
 
@@ -1735,20 +1806,20 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     ##########################################################################################
     # SET UP THE REAL SPACE COORDINATES OF THE GRID - FW Revisit
 
-    gridvec = np.linspace(-gridlength / 2.0, gridlength / 2.0, resol, endpoint=False)
+    gridvec = np.linspace(-lengthC / 2.0, lengthC / 2.0, resol, endpoint=False)
     
     xarray, yarray, zarray = np.meshgrid(
         gridvec, gridvec, gridvec,
         sparse=True, indexing='ij')
     
-    WN = 2*np.pi*np.fft.fftfreq(resol, gridlength/(resol)) # 2pi Pre-multiplied
+    WN = 2*np.pi*np.fft.fftfreq(resol, lengthC/(resol)) # 2pi Pre-multiplied
     
     Kx,Ky,Kz = np.meshgrid(WN,WN,WN,sparse=True, indexing='ij',)
     
 ##########################################################################################
     # SET UP K-SPACE COORDINATES FOR COMPLEX DFT
 
-    kvec = 2 * np.pi * np.fft.fftfreq(resol, gridlength / float(resol))
+    kvec = 2 * np.pi * np.fft.fftfreq(resol, lengthC / float(resol))
     
     kxarray, kyarray, kzarray = np.meshgrid(
         kvec, kvec, kvec,
@@ -1770,7 +1841,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         print("======================================================")
         printU(f"IO: Loaded initial wavefunction from {InitPath}",'IO')
         
-        MassCom = Density*gridlength**3
+        MassCom = Density*lengthC**3
 
         UVelocity = convert(np.array(UVel),s_velocity_unit, 'v')
 
@@ -1783,7 +1854,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
 
     psi = pyfftw.zeros_aligned((resol, resol, resol), dtype='complex128')
 
-    MassCom = Density*gridlength**3
+    MassCom = Density*lengthC**3
 
     UVelocity = convert(np.array(UVel),s_velocity_unit, 'v')
 
@@ -1886,7 +1957,6 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
             PhaseEx = np.angle(psiEx)
             psi = ne.evaluate("psi*exp(1j*PhaseEx)")
 
-
     fft_psi = pyfftw.builders.fftn(psi, axes=(0, 1, 2), threads=num_threads)
     
     ifft_funct = pyfftw.builders.ifftn(funct, axes=(0, 1, 2), threads=num_threads)       
@@ -1896,11 +1966,18 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     #    print(f"{Version} SP: Peforming an Additional FFT Step to Get rid of zeroes.")
     #    psi = ifft_funct(fft_psi(psi)) # New FFT Step 
 
-    rho = ne.evaluate("real(abs(psi)**2)")
-     ##########################################################################################
+    # Density = 0
+    
+    # Initial Wavefunction Now In Memory
+    
+
+    rho = ne.evaluate("abs(abs(psi)**2)")
+        
+    rho = rho.real
+    ##########################################################################################
     # COMPUTE SIZE OF TIMESTEP (CAN BE INCREASED WITH step_factor)
 
-    delta_t = (gridlength/float(resol))**2/np.pi
+    delta_t = (lengthC/float(resol))**2/np.pi
 
     min_num_steps = t / delta_t
     min_num_steps_int = int(min_num_steps + 1)
@@ -1938,9 +2015,9 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     ##########################################################################################
     # SETUP K-SPACE FOR RHO (REAL)
 
-    rkvec = 2 * np.pi * np.fft.fftfreq(resol, gridlength / float(resol))
+    rkvec = 2 * np.pi * np.fft.fftfreq(resol, lengthC / float(resol))
     
-    krealvec = 2 * np.pi * np.fft.rfftfreq(resol, gridlength / float(resol))
+    krealvec = 2 * np.pi * np.fft.rfftfreq(resol, lengthC / float(resol))
     
     rkxarray, rkyarray, rkzarray = np.meshgrid(
         rkvec, rkvec, krealvec,
@@ -1951,8 +2028,9 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
 
     rfft_rho = pyfftw.builders.rfftn(rho, axes=(0, 1, 2), threads=num_threads)
     
-    phik = rfft_rho(rho)  # not actually phik but phik is defined in next line
-    
+
+    phik = rfft_rho(rho.real)  # not actually phik but phik is defined in next line
+
     phik = ne.evaluate("-4*pi*phik/rkarray2")
 
     phik[0, 0, 0] = 0
@@ -1991,7 +2069,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
             np.save(f'./Green Functions/G{resol}.npy',green)
             
         #green = makeEvenArray(green)
-        phiSP = IP_jit(rho, green, gridlength, fft_X, ifft_X, fft_plane, ifft_plane)
+        phiSP = IP_jit(rho, green, lengthC, fft_X, ifft_X, fft_plane, ifft_plane)
         
     else:
         printU(f"Poisson Equation Solveed Using FFT.",'SP')
@@ -1999,7 +2077,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         
     ##########################################################################################
        
-    # FW NBody Vanilla
+    # NBody
     EGPCM = 0
     for MI, particle in enumerate(particles):
                
@@ -2012,7 +2090,11 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         
         masslist.append(mT)
 
-        position = convert(np.array(particle[1]), m_position_unit, 'l')  
+        position = convert(np.array(particle[1]), m_position_unit, 'l')
+        
+        if Shift:
+            position = GridShift(position, lengthC, resol)
+        
         velocity = convert(np.array(particle[2]), m_velocity_unit, 'v')
         
         IND = int(6*MI)
@@ -2039,7 +2121,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
 
         
         if (save_options[3]):
-            EGPCM += mT*QuickInterpolate(phiSP,gridlength,resol,np.array([TMx,TMy,TMz]))
+            EGPCM += mT*QuickInterpolate(phiSP,lengthC,resol,np.array([TMx,TMy,TMz]))
         MI = int(MI + 1)
         
         if AutoStop and Uniform and len(particles) == 1:
@@ -2049,8 +2131,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
             E0 = 1/2 * mT * np.linalg.norm(velocity + UVelocity)**2  
             if E0 == 0:
                 E0 = 1
-            # Always shooting towards the right.
-
+           
     masslist = np.array(masslist)
     TMState = np.array(TMState)
     TMState = TMState.flatten(order='C')
@@ -2108,7 +2189,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     
         ULDump(loc,psi,TMState,'Init')
         
-        
+    
     else:
         printU(f'Successfully initiated Wavefunction and NBody Initial Conditions.', 'Init')
 
@@ -2134,7 +2215,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         
         SpongeRatio = 1/2
         # This works in grid units in Chapel. We make it work in Code Units.
-        rn = 1/2*gridlength
+        rn = 1/2*lengthC
         rp = SpongeRatio*rn
         rs = (rn+rp)/2
         invdelta = 1/(rn-rp)
@@ -2152,7 +2233,8 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     # LOOP NOW BEGINS
     if Silent:
         clear_output()
-    print(f"{D_version}\nExternal Message: {Message}")
+        print(f"{D_version}\nMessage: {Message}")
+        
     printU(f"Simulation name is {loc}",'Runtime')
     printU(f"{resol} Resolution for {duration:.4g}{duration_units}",'Runtime')
     printU(f"Simulation Started at {tBeginDisp}.",'Runtime')
@@ -2194,32 +2276,42 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         if UseDispSponge:
             prog_bar(actual_num_steps, ix + 1, tint,'DS',PBEDisp)
             psi *= np.exp(-PreMult*h)
-                    
-        rho = ne.evaluate("real(abs(psi)**2)")
         
-        phik = rfft_rho(rho)
+
+        rho = ne.evaluate("abs(abs(psi)**2)")
+        rho = rho.real
+        #phik = rfft_rho(rho)
         
-        phik = ne.evaluate("-4*pi*(phik)/rkarray2")
+        #phik = ne.evaluate("-4*pi*(phik)/rkarray2")
         
-        phik[0, 0, 0] = 0 # Kill the base frequency.
+        #phik[0, 0, 0] = 0 # Kill the base frequency.
+        
+
+        phik = rfft_rho(rho)  # not actually phik but phik is defined in next line
+
+            
+        phik = ne.evaluate("-4*pi*phik/rkarray2")
+
+        phik[0, 0, 0] = 0
+        
 
         prog_bar(actual_num_steps, ix + 1, tint,'SP',PBEDisp)
         # New Green Function Methods
         if not IsoP:
             phiSP = irfft_phi(phik)
         else:
-            phiSP = IP_jit(rho, green, gridlength, fft_X, ifft_X, fft_plane, ifft_plane)
+            phiSP = IP_jit(rho, green, lengthC, fft_X, ifft_X, fft_plane, ifft_plane)
 
         # FW STEP MAGIC HAPPENS HERE
         prog_bar(actual_num_steps, ix + 1, tint,'RK4',PBEDisp)
         
         if NBodyInterp:
 
-            TMState, GradientLog = NBodyAdvance(TMState,h,masslist,phiSP,a,gridlength,resol,NS)
+            TMState, GradientLog = NBodyAdvance(TMState,h,masslist,phiSP,a,lengthC,resol,NS)
             
         else:
 
-            TMState, GradientLog = NBodyAdvance_NI(TMState,h,masslist,phiSP,a,gridlength,resol,NS)
+            TMState, GradientLog = NBodyAdvance_NI(TMState,h,masslist,phiSP,a,lengthC,resol,NS)
  
         prog_bar(actual_num_steps, ix + 1, tint,'Phi ')
         phiTM = pyfftw.zeros_aligned((resol, resol, resol), dtype='float64') # Reset!
@@ -2248,12 +2340,13 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
                         phiTM = phiTM * 1/2*(np.tanh((b-distarrayTM)*Steep)+1)
 
                     if (save_options[3]) and ((ix + 1) % its_per_save) == 0:
-                        EGPCM += mT*QuickInterpolate(phiSP,gridlength,resol,np.array([TMx,TMy,TMz]))
+                        EGPCM += mT*QuickInterpolate(phiSP,lengthC,resol,np.array([TMx,TMy,TMz]))
             
         if AutoStop and len(particles) == 1:
             velocity = TMState[3:6]
-            EKDisp = (1/2 * mT * np.linalg.norm(velocity + UVelocity)**2 ) / E0
-            PBEDisp = f'KE~{100*EKDisp:.2f}%'
+            Vdisp = np.linalg.norm(velocity)
+            VTot = np.linalg.norm(UVelocity)
+            PBEDisp = f'[V={Vdisp:.2f} / Tg.V={VTot:.2f}]'
             
         if SelfGravity:
             phi = ne.evaluate('phiSP + phiTM')
@@ -2266,9 +2359,10 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         #Next if statement ensures that an extra half step is performed at each save point
         if (((ix + 1) % its_per_save) == 0) and HaSt == 0:
             psi = ne.evaluate("exp(-1j*0.5*h*phi)*psi")
-            rho = ne.evaluate("real(abs(psi)**2)")
-            HaSt = 1
 
+            rho = ne.evaluate("abs(abs(psi)**2)")
+            HaSt = 1
+            rho = rho.real
             prog_bar(actual_num_steps, ix + 1, tint,'IO',PBEDisp)
             #Next block calculates the energies at each save, not at each timestep.
             if (save_options[3]):
@@ -2294,8 +2388,8 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
             
             if (save_options[3]):  
                 np.save(os.path.join(os.path.expanduser(loc), "Outputs/egylist.npy"), egylist)
-                np.save(os.path.join(os.path.expanduser(loc), "Outputs/egpcmlist.npy"), egpcmlist)
-                np.save(os.path.join(os.path.expanduser(loc), "Outputs/egpcmMlist.npy"), egpcmMlist)
+                np.save(os.path.join(os.path.expanduser(loc), "Outputs/egpcmlist.npy"), egpcmlist) # Original Method
+                np.save(os.path.join(os.path.expanduser(loc), "Outputs/egpcmMlist.npy"), egpcmMlist) # New Method
                 np.save(os.path.join(os.path.expanduser(loc), "Outputs/egpsilist.npy"), egpsilist)
                 np.save(os.path.join(os.path.expanduser(loc), "Outputs/ekandqlist.npy"), ekandqlist)
                 np.save(os.path.join(os.path.expanduser(loc), "Outputs/masseslist.npy"), mtotlist)
@@ -2319,7 +2413,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
                 
                     print(f'Integrated Time is {TIntDisp:.5g}{duration_units}')
 
-                    file = open(f'{loc}/StoppingTime.txt', "w+")
+                    file = open(f'{loc}/StoppingTime.uldm', "w+")
                     file.write(f"{TIntegrate}")
                     file.close()
                     TimeWritten = True
@@ -2360,7 +2454,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         ULDump(loc,psi,TMState,'Final')
         
     if AutoStop and not TimeWritten:
-        file = open(f'{loc}/StoppingTime.txt', "w+")
+        file = open(f'{loc}/StoppingTime.uldm', "w+")
         file.write('-1')
         file.close()
 
@@ -2467,7 +2561,7 @@ def get_size(start_path):
 def Load_Latest(save_path):
     
     
-    with open('{}{}{}'.format('./',save_path, '/latest.txt'), 'r') as timestamp:
+    with open('{}{}{}'.format('./',save_path, '/latest.uldm'), 'r') as timestamp:
         ts = timestamp.read()
         printU('Loading Folder',ts)
         
@@ -2605,7 +2699,7 @@ def Load_npys(loc,save_options, LowMem = False):
         except FileNotFoundError:
             success = False
 
-    printU(f"Loaded {x} Data Entries",'LoadNPY')
+    printU(f"Loaded {x} Data Entries from {loc}",'LoadNPY')
     return x, Out
 
 
@@ -2775,12 +2869,13 @@ def GenerateConfig(NS, central_mass, length, length_units, resol, duration, dura
             timestamp = tm + f'@{resol}'
    
     else:
-        print("What is the name of the run? Leave blank to use automatically generated timestamp.")
+        print("What is the name of the run? Blank to use generated timestamp. ABORT to cancel compilation.")
         InputName = input()
-
-        if InputName != "":
+        
+        if InputName == "ABORT":
+            return ""
+        elif InputName != "":
             timestamp = InputName
-
         else:
             timestamp = tm + f'@{resol}'
 
@@ -2796,7 +2891,7 @@ def GenerateConfig(NS, central_mass, length, length_units, resol, duration, dura
             os.mkdir(Dir)
             
         else: 
-            print(f"{Version} IO: Folder Not Empty. Are you sure you want to proceed [Y/n]? \nTo continue using the pre-existing config file, type [C].")
+            print(f"{Version} IO: Folder Not Empty. Are you sure you want to proceed [Y/n]? \nTo reuse the pre-existing config file, type [C].")
               
             Protect = str(input())
         
@@ -2887,7 +2982,7 @@ def GenerateConfig(NS, central_mass, length, length_units, resol, duration, dura
             })
 
 
-    with open('{}{}{}{}{}'.format('./', save_path, '/', timestamp, '/config.txt'), "w+") as outfile:
+    with open('{}{}{}{}{}'.format('./', save_path, '/', timestamp, '/config.uldm'), "w+") as outfile:
         json.dump(Conf_data, outfile,indent=4)
 
         
@@ -2923,26 +3018,40 @@ def Runs(save_path, Automatic = True):
         return Latest
     
     else:
-        print("Which folder do you want to analyse? Blank to load the latest one.")
-        Ind = int(input() or -1)
+        print("Which folder do you want to analyse? Blank to load the latest one. 'X[Number]' to Delete")
+        
+        Ind = (input() or int(-1))
 
         if Ind == -1 and Automatic:
             print(f"ULHelper: Loading {Latest}")
             return Latest
+        
+        elif Ind.startswith('X'):
+            Ind = Ind[1:]
+            IndTD = Log[int(Ind)]
+            TDName = os.path.join(save_path, runs[IndTD])
+            
+            import shutil
+                       
+            shutil.rmtree(TDName)
+            clear_output()
+            return Runs(save_path, Automatic = Automatic)
+        
         else:
+            Ind = int(Ind)
             Ind = Log[Ind]
             print(f"ULHelper: Loading {runs[Ind]}")
             return runs[Ind]
 
 def LoadConfig(loc):
         
-        configfile = loc + '/config.txt'
+        central_mass = 0
+        
+        configfile = loc + '/config.uldm'
         
         with open(configfile) as json_file:
             config = json.load(json_file)
-        
-        central_mass = 0
-        
+               
                 
         if config["PyUL Version"] > S_version:
             raise RuntimeError("Configuration file generated by a newer version of PyUL.")
@@ -3026,13 +3135,16 @@ def LoadConfig(loc):
 def NBodyEnergy(MassListSI,TMDataSI,EndNum,a=0,length_units = ''): # kg, m, m/s, Int, code unit -1
     
     if a == 0:
-        print('Warning: Using Standard Newtonian Potential.')
+        printU('Using Standard Newtonian Potential.', 'NBoE')
     
     else:
         ADim = convert(a,length_units,'l')
-        
+    
+        printU(f'The dimensionful a is {ADim:.4f}({length_units})^(-1)', 'NBoE')
+    
     NBo = len(MassListSI)
-    print(f'Reconstructing Potential and Kinetic Energies for {NBo} stored objects.')
+    
+    printU(f'Reconstructing Potential and Kinetic Energies for {NBo} stored objects.','NBoE')
 
     KS = np.zeros(int(EndNum))
     PS = np.zeros(int(EndNum))
@@ -3070,7 +3182,7 @@ def NBodyEnergy(MassListSI,TMDataSI,EndNum,a=0,length_units = ''): # kg, m, m/s,
                 if a == 0:
                     PS[i] += - 1*G*m1*m2/rN
                 else:
-                    PS[i] += - 1*G*m1*m2*ADim/np.sqrt(1+ADim*2*rN**2)
+                    PS[i] += - 1*G*m1*m2*ADim/np.sqrt(1+ADim**2*rN**2)
 
             
     return NBo, KS, PS
@@ -3090,7 +3202,8 @@ def PopulateWithStars(embeds,particles,rIn = 0.4,rOut = 1.2,InBias = 0, NStars =
         GPos = np.array(Halo[1])
         GVel = np.array(Halo[2])
         GMass = Halo[0]
-
+        GRatio = Halo[3]
+        Scale = GRatio*0.5 + 0.5
         
         for i in range(NStars):
 
@@ -3098,10 +3211,13 @@ def PopulateWithStars(embeds,particles,rIn = 0.4,rOut = 1.2,InBias = 0, NStars =
 
             theta = 2*np.pi*np.random.random()
             
-            v = FOSR(GMass,r)
+            v = FOSR(GMass,r) * Scale
 
             Position = np.array([r*np.cos(theta),r*np.sin(theta),0]) + GPos
-            Velocity = np.array([v*np.sin(theta),-v*np.cos(theta),0]) + GVel
+            
+
+            
+            Velocity = np.array([v*np.sin(theta),-v*np.cos(theta),0])  + GVel
 
             Mass = MassMax*np.random.random()
 
@@ -3357,8 +3473,8 @@ def ParameterScanGenerator(path_to_config,ScanParams,ValuePool,save_path,
                 
                 length = lengthOrig * Pool[iDiv]
                 PString = 'S'
-                
-                resol =  int(RPL * length)
+                if KeepResol:
+                    resol =  int(RPL * length)
             
             elif ScanParams[j] == 'Smoothing':
                 a = Pool[iDiv]
@@ -3376,7 +3492,7 @@ def ParameterScanGenerator(path_to_config,ScanParams,ValuePool,save_path,
         
         print('Generated config file for', Str)
         
-    file = open('{}{}{}'.format('./', save_path, '/LookUp.txt'), "w+")
+    file = open('{}{}{}'.format('./', save_path, '/LookUp.uldm'), "w+")
     
     file.write(f'PyUL {S_version} Parameter Scan Settings Lookup \n')
     
@@ -3460,9 +3576,98 @@ def XYSwap(Vec):
     return [Vec[1],Vec[0],Vec[2]]
 
 
-class Simulation():
+# Check for Energy Evaluation Consistency
+def SmoothingScan(a,resol,length,length_units,Density,density_unit,M = 1,m_mass_unit = 'M_solar_masses', N = 20, Grids = 1, curve = 'xyz', AxVer = 2, Shift = False):
     
-    def __init__(self,ConfigFile = ''):
+    lengthC = convert(length,length_units,'l')
+    DensityC = convert(Density,density_unit,'d')
+    massC = convert(M,m_mass_unit,'m')
+    
+    if AxVer == 1:
+        gridvec = np.linspace(-lengthC / 2.0 + lengthC / float(2 * resol),
+                  lengthC / 2.0 - lengthC / float(2 * resol), resol, endpoint = True)
+    if AxVer == 4:
+        gridvec = np.linspace(-lengthC / 2.0 + lengthC / float(2 * resol),
+                  lengthC / 2.0 - lengthC / float(2 * resol), resol, endpoint = False)
         
-        if ConfigFile == '':
-            self.resol = 128
+    elif AxVer == 3:
+        gridvec = np.linspace(-lengthC / 2.0, lengthC / 2.0, resol, endpoint= True)
+        
+    elif AxVer == 2:
+        gridvec = np.linspace(-lengthC / 2.0, lengthC / 2.0, resol, endpoint= False)
+    
+    xarray, yarray, zarray = np.meshgrid(
+        gridvec, gridvec, gridvec,
+        sparse=True, indexing='ij')
+    
+    GridSize = lengthC/resol # Grid Size
+    
+    VCell = GridSize ** 3
+    
+    
+    GridStep = GridSize/N # Scanning Size
+    
+    if curve == 'x':
+        StepVec = np.array([1,0,0])
+
+    elif curve == 'xy':
+        StepVec = np.array([1,1,0])
+
+    elif curve == 'xyz':
+        StepVec = np.array([1,1,1])
+     
+    Origin = - (Grids)/2 * StepVec
+
+    # Initial Potential Energy
+    
+    mT = massC
+    
+    EScan = []
+    x = []
+    
+    for NI in range(Grids*N+1):
+        
+        phiTM = np.zeros([resol,resol,resol])
+        
+        position = Origin * GridSize + NI * StepVec* GridStep
+
+        if Shift:      
+            position = GridShift(position, lengthC, resol)
+            
+        
+        TMx = position[0]
+        TMy = position[1]
+        TMz = position[2]
+
+        distarrayTM = ne.evaluate("((xarray-TMx)**2+(yarray-TMy)**2+(zarray-TMz)**2)**0.5") # Radial coordinates
+
+        if a == 0:
+            phiTM = ne.evaluate("phiTM-mT/(distarrayTM)")
+        else:
+            phiTM = ne.evaluate("phiTM-a*mT/sqrt(1+a**2*distarrayTM**2)")
+            
+        E0 = np.sum(phiTM*DensityC*VCell)
+        
+        EScan.append(E0)
+        x.append(position[0])
+        
+    return np.array(x), np.array(EScan), gridvec
+        
+    
+    
+def GridShift(position, lengthC, resol, direction = '-'):
+    
+    position = np.array(position)
+    
+    return (position - lengthC/resol/2.0).tolist()
+    
+    
+def GetRel(array):
+    return array - array[0]
+
+class Universe():
+    H = 1
+    
+class Simulation():
+    Data = {}
+            
