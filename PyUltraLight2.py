@@ -1,6 +1,6 @@
 Version   = str('PyUL2') # Handle used in console.
-D_version = str('Build 2021 May 05') # Detailed Version
-S_version = 21.1 # Short Version
+D_version = str('Build 2021 May 13') # Detailed Version
+S_version = 21.3 # Short Version
 
 # Housekeeping
 import time
@@ -1700,7 +1700,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         json.dump(PyULConfig, outfile,indent=4)
 
     
-    NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_format, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, embeds, Uniform,Density, density_unit,a, B, UVel = LoadConfig(loc)
+    NS, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_format, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, embeds, Uniform,Density, density_unit,a, UVel = LoadConfig(loc)
 
         
     num_threads = multiprocessing.cpu_count()
@@ -1781,8 +1781,6 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
 
     lengthC = convert(length, length_units, 'l')
     
-    b = lengthC * B/2
-
     t = convert(duration, duration_units, 't')
 
     t0 = convert(start_time, duration_units, 't')
@@ -2028,7 +2026,6 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
 
     rfft_rho = pyfftw.builders.rfftn(rho, axes=(0, 1, 2), threads=num_threads)
     
-
     phik = rfft_rho(rho.real)  # not actually phik but phik is defined in next line
 
     phik = ne.evaluate("-4*pi*phik/rkarray2")
@@ -2280,20 +2277,12 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
 
         rho = ne.evaluate("abs(abs(psi)**2)")
         rho = rho.real
-        #phik = rfft_rho(rho)
-        
-        #phik = ne.evaluate("-4*pi*(phik)/rkarray2")
-        
-        #phik[0, 0, 0] = 0 # Kill the base frequency.
-        
 
         phik = rfft_rho(rho)  # not actually phik but phik is defined in next line
-
             
         phik = ne.evaluate("-4*pi*phik/rkarray2")
 
-        phik[0, 0, 0] = 0
-        
+        phik[0, 0, 0] = 0        
 
         prog_bar(actual_num_steps, ix + 1, tint,'SP',PBEDisp)
         # New Green Function Methods
@@ -2314,8 +2303,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
             TMState, GradientLog = NBodyAdvance_NI(TMState,h,masslist,phiSP,a,lengthC,resol,NS)
  
         prog_bar(actual_num_steps, ix + 1, tint,'Phi ')
-        phiTM = pyfftw.zeros_aligned((resol, resol, resol), dtype='float64') # Reset!
-        
+        phiTM = pyfftw.zeros_aligned((resol, resol, resol), dtype='float64') # Reset!   
         
         if NBodyGravity:
             for MI in range(NumTM):
@@ -2352,8 +2340,6 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
             phi = ne.evaluate('phiSP + phiTM')
         else: 
             phi = phiTM
-            
-            
 
         prog_bar(actual_num_steps, ix + 1, tint,'FT',PBEDisp)
         #Next if statement ensures that an extra half step is performed at each save point
@@ -2703,21 +2689,13 @@ def Load_npys(loc,save_options, LowMem = False):
     return x, Out
 
 
-def SmoothingReport(a,resol,clength,B = 0):
-    import matplotlib.pyplot as plt
-
+def SmoothingReport(a,resol,clength, silent = True):
+    
     GridLenFS = clength/(resol)
     
     COMin = resol/2
     COMid = resol/2*np.sqrt(2)
     COMax = resol/2*np.sqrt(3)
-   
-    fig_grav = plt.figure(figsize=(12, 12))
-
-    # Diagnostics For Field Smoothing
-    
-    ax1 = plt.subplot(211)
-    ax2 = plt.subplot(212)
     
     
     FS = np.arange(resol)+1
@@ -2726,75 +2704,83 @@ def SmoothingReport(a,resol,clength,B = 0):
     
     GOrig = -1/rR
     
-    GMod = -a*1/np.sqrt(1+a**2*rR**2)
+    GMod = -a/np.sqrt(1+a**2*rR**2)
     
     GDiff = - GOrig + GMod
     
+    GRati = GMod / GOrig
+    
     # Two little quantifiers
-    BoundaryEn = next(x for x, val in enumerate(GDiff) if val < 1e-2)
+    BoundaryEn = next(x for x, val in enumerate(GRati) if val > 0.99)
     rS = FS[BoundaryEn]
     
     BoundaryEx = next(x for x, val in enumerate(GMod) if val > -a/2)
     rQ = FS[BoundaryEx]
     
-    ax1.plot(FS,GOrig,'k--',label = 'Point Potential')
-       
     
-    ax1.plot(FS,GMod,'g.',label = 'Modified Potential')
+    if not silent:
         
-    ax1.set_ylim([-1.5*a,0])
-    
-    
-    ax1.vlines(rS,-1.5*a,0,color = 'red')
-    ax1.vlines(rQ,-1.5*a,0,color = 'blue')
-    
-    ax1.vlines([COMin,COMid,COMax],-1.5*a,0,color = 'black')
-    
-    ax1.legend()
-    
-    ax1.set_ylabel('$\propto$Energy')
-    ax1.grid()
-    
-    ax2.semilogy(FS,(GDiff),'g.')
-    ax2.set_xlabel('Radial distance from origin (Grids)')
-    ax2.set_ylabel('Difference')
-    ax2.vlines(rS,0,1e5,color = 'red')
-    ax2.vlines(rQ,0,1e5,color = 'blue')
-    
-    ax2.set_ylim([np.min(GDiff),np.max(GDiff)])
-    ax2.grid()
-    
-    plt.show()
-    
-    
-    print('Generating Field Smoothing Report:')
-    print('  The simulation runs on a %.0f^3 grid with total side length %.1f'%(resol,clength))
-    print('  The simulation grid size is %.4f Code Units,\n  ' % ( GridLenFS))
-    
-    print('\n==========Grid Counts of Important Features=========\n')
-    print("  Radius outside which the fields are practically indistinguishable (Grids): %.0f" % rS)
-    print("  Modified Potential HWHM (Grids): %.0f" % rQ)
-    
+        import matplotlib.pyplot as plt
 
-def CutoffReport(B,resol,clength,Steep = 100):
-    import matplotlib.pyplot as plt
-    fig_b = plt.figure(figsize=(7, 5))
+        fig_grav = plt.figure(figsize=(10, 9))
 
-    b = B*clength/2
+        # Diagnostics For Field Smoothing
+
+        ax1 = plt.subplot(211, xticks = FS, xticklabels = [])
+        ax2 = plt.subplot(212, sharex = ax1,xticks = FS, xticklabels = [])
+
+        ax1.plot(FS,GOrig,'k--',label = 'Point Potential')
+
+        ax1.plot(FS,GMod,'g.',label = 'Plummer Potential')
+
+        ax1.set_ylim([-1.5*a,0])
+        ax1.set_xlim([0,COMax])
+
+        ax1.vlines(rS,-1.5*a,0,color = 'red',label = '1% difference')
+        ax1.vlines(rQ,-1.5*a,0,color = 'blue',label = 'HWHM')
+
+        ax1.vlines([COMin,COMid,COMax],-1.5*a,0,color = 'black')
+
+        ax1.legend()
+
+        ax1.set_ylabel('Potential (C.U.)')
+        ax1.grid()
+
+        ax2.plot(FS,(GRati),'g.')
+        ax2.set_xlabel('Radial distance from origin (Grids)')
+        ax2.set_ylabel('$Φ_{Plummer}*r$')
+        ax2.vlines(rS,0,1,color = 'red')
+        ax2.vlines(rQ,0,1,color = 'blue')
+        ax2.set_ylim(0,1)
+        #ax2.set_ylim([np.min(GDiff),np.max(GDiff)])
+        ax2.grid()
+
+        plt.show()
+
+        print('Generating Field Smoothing Report:')
+        print('  The simulation runs on a %.0f^3 grid with total side length %.1f'%(resol,clength))
+        print('  The simulation grid size is %.4f Code Units,\n  ' % ( GridLenFS))
+
+        print('\n==========Grid Counts of Important Features=========\n')
+        print("  Radius outside which the fields are practically indistinguishable (Grids): %.0f" % rS)
+        print("  Modified Potential HWHM (Grids): %.0f" % rQ)
+
+def MeshSpacing(resol,length,length_units):
+    clength = convert(length,length_units,'l')
+    lengthpc = convert_back(clength,'pc','l')
+    printU(f'Each grid spacing is {length/resol:.3f}{length_units}, this is {lengthpc:.3f}pc.','Mesh')
+    return clength/resol
     
-    # Diagnostics For Field Cutoff
-    ax1 = plt.subplot(111)
+def GenPlummer(rP,resol,length,length_units, silent = False):
+    a = convert_back(1/rP,length_units,'l')
+    clength = convert(length,length_units,'l')
+    SmoothingReport(a,resol,clength, silent = silent)
+    return a # IN CODE UNITS (LENGTH^-1)
     
-    xAr = np.linspace(-clength/2,clength/2,resol,endpoint = False)
+def RecPlummer(a,length_units):   
+    rP = 1/convert(a,length_units,'l')
+    return rP # IN USER UNITS (LENGTH)
     
-    RAr = ne.evaluate('sqrt(xAr*xAr)')
-                
-    Premult = 1/2*(np.tanh((b-RAr)*Steep)+1)
-    
-    ax1.plot(xAr,Premult)
-    ax1.set_ylim([0,1.1])
-    
-        
 def EmbedParticle(particles,embeds,solitons):
 
     EI = 0
@@ -2856,7 +2842,7 @@ def SaveOptionsDigest(OptionsText):
     
     return save_options.tolist()
  
-def GenerateConfig(NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_path, save_format, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles,embeds, Uniform,Density,density_unit,a,B,UVel,NoInteraction = False,Name = ''
+def GenerateConfig(NS, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_path, save_format, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles,embeds, Uniform,Density,density_unit,a,UVel,NoInteraction = False,Name = ''
            ):
 
     tm = GenFromTime()
@@ -2958,7 +2944,10 @@ def GenerateConfig(NS, central_mass, length, length_units, resol, duration, dura
     'Velocity Units': s_velocity_unit
     })
 
+    rP = RecPlummer(np.real(a),length_units)
+    
     Conf_data['Matter Particles'] = ({
+    'Plummer Radius': rP,
     'Condition': particles,
     'Mass Units': m_mass_unit,
     'Position Units': m_position_unit,
@@ -2966,11 +2955,9 @@ def GenerateConfig(NS, central_mass, length, length_units, resol, duration, dura
     })
 
     Conf_data['Central Mass'] = 0
+    
 
-    Conf_data['Field Smoothing'] = np.real(a)
-
-    Conf_data['NBody Cutoff Factor'] = np.real(0)
-
+    #Conf_data['Field Smoothing'] = np.real(a)
 
     Conf_data['Uniform Field Override'] = ({
 
@@ -3060,7 +3047,7 @@ def LoadConfig(loc):
         try:
             save_options = SaveOptionsDigest(config["Save Options"]["Flags"])
             
-        except KeyError: # Backwards Compatibility
+        except KeyError:
             save_options = config["Save Options"]["flags"]
 
         try: 
@@ -3085,10 +3072,6 @@ def LoadConfig(loc):
         
         ### Space Stuff
         
-        a = config["Field Smoothing"]
-        
-        B = config['NBody Cutoff Factor']
-        
         try:
             resol = int(config["Spatial Resolution"])
         except KeyError:
@@ -3108,6 +3091,15 @@ def LoadConfig(loc):
         
         m_velocity_unit = config["Matter Particles"]['Velocity Units']
       
+        try:
+            rP = config["Matter Particles"]["Plummer Radius"]
+            
+            a = GenPlummer(rP,resol,length,length_units, silent = True)
+            
+        except KeyError:
+            
+            a = config["Field Smoothing"]
+            
         ### ULDM Stuff
         
         solitons = config["ULDM Solitons"]['Condition']
@@ -3128,7 +3120,7 @@ def LoadConfig(loc):
         UVel = config["Uniform Field Override"]['Uniform Velocity']
       
          
-        return  NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_format, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, embeds, Uniform,Density, density_unit,a, B, UVel
+        return  NS, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_format, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, embeds, Uniform,Density, density_unit,a, UVel
 
 
 
@@ -3282,7 +3274,9 @@ def SolEst(mass,length,resol,mass_unit = '',length_units = '', Plot = False, Den
         
         else:
             funct[index] = np.nan
+            
     funct = funct**2
+    
     if Plot:
         plt.plot(rarray,funct,'--')
         plt.xlim([0,code_length/2])
@@ -3349,7 +3343,7 @@ def ParameterScanGenerator(path_to_config,ScanParams,ValuePool,save_path,
         
     # Load background parameters from donor config file.
     
-    NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, SO, save_format, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, embeds, Uniform,Density, density_unit,a, B, UVel = LoadConfig(path_to_config)
+    NS, length, length_units, resol, duration, duration_units, step_factor, save_number, SO, save_format, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, embeds, Uniform,Density, density_unit,a, UVel = LoadConfig(path_to_config)
     
     if SaveSpace:
         save_options = 'Minimal'
@@ -3367,9 +3361,7 @@ def ParameterScanGenerator(path_to_config,ScanParams,ValuePool,save_path,
         resol_old = resol
         Density_old = Density
         duration_old = duration
-    
-    if SaveSpace:
-        save_options = [False,False,False,True,True,True,False,False,True,False]
+
 
     Units = []
     
@@ -3383,15 +3375,15 @@ def ParameterScanGenerator(path_to_config,ScanParams,ValuePool,save_path,
 
             Units.append('Grids')
 
-        elif ScanP == 'TM_Mass':
+        elif ScanP == 'TM_M':
 
             Units.append(m_mass_unit)
 
-        elif ScanP == 'TM_vY':
+        elif ScanP == 'TM_v':
 
             Units.append(m_velocity_unit)
 
-        elif ScanP == 'UVelY':
+        elif ScanP == 'U_v':
 
             Units.append(s_velocity_unit)
 
@@ -3405,9 +3397,9 @@ def ParameterScanGenerator(path_to_config,ScanParams,ValuePool,save_path,
             
             lengthOrig = length
             
-        elif ScanP == 'Smoothing':
+        elif ScanP == 'Plummer_Radius':
             KeepSmooth = False
-            Units.append('')
+            Units.append(length_units)
 
         else:
             raise ValueError('Unrecognized parameter type used.')
@@ -3449,17 +3441,17 @@ def ParameterScanGenerator(path_to_config,ScanParams,ValuePool,save_path,
                 
                 PString = 'R'
             
-            elif ScanParams[j] == 'TM_Mass':
+            elif ScanParams[j] == 'TM_M':
                 
                 particles[0][0] = Pool[iDiv]   
                 PString = 'M'
             
-            elif ScanParams[j] == 'TM_vY':
+            elif ScanParams[j] == 'TM_v':
                 
                 particles[0][2][1] = Pool[iDiv]
                 PString = 'V'
                 
-            elif ScanParams[j] == 'UVelY':
+            elif ScanParams[j] == 'U_v':
                 
                 UVel[1] = Pool[iDiv]  
                 PString = 'U'
@@ -3476,8 +3468,10 @@ def ParameterScanGenerator(path_to_config,ScanParams,ValuePool,save_path,
                 if KeepResol:
                     resol =  int(RPL * length)
             
-            elif ScanParams[j] == 'Smoothing':
-                a = Pool[iDiv]
+            elif ScanParams[j] == 'Plummer_Radius':
+                
+                rP = Pool[iDiv]
+                a = GenPlummer(rP,resol,length,length_units, silent = True)
                 PString = 'A'
             
             else:
@@ -3488,7 +3482,7 @@ def ParameterScanGenerator(path_to_config,ScanParams,ValuePool,save_path,
         
         # GenerateConfig Is Done Per i Loop
     
-        GenerateConfig(NS, central_mass, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_path, save_format, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles,embeds, Uniform,Density,density_unit,a,B,UVel,True,Str)
+        GenerateConfig(NS, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_path, save_format, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles,embeds, Uniform,Density,density_unit,a,UVel,True,Str)
         
         print('Generated config file for', Str)
         

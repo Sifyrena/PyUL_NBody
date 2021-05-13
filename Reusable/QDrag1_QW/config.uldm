@@ -1,6 +1,6 @@
 {
-    "PyUL Version": 21.0,
-    "PyUL Version Descriptor": "Build 2021 May 05",
+    "PyUL Version": 21.3,
+    "PyUL Version Descriptor": "Build 2021 May 13",
     "Description": "Base File For Run Configuration",
     "Config Generation Time": "20210509_215445",
     "Save Options": {
@@ -29,6 +29,7 @@
         "Velocity Units": "km/s"
     },
     "Matter Particles": {
+	"Plummer Radius": 0.048
         "Condition": [
             [
                 10,
@@ -49,7 +50,6 @@
         "Velocity Units": "km/s"
     },
     "Central Mass": 0,
-    "Field Smoothing": 882.9,
     "NBody Cutoff Factor": 0,
     "Uniform Field Override": {
         "Flag": true,
