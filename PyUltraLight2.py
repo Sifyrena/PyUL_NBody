@@ -3394,11 +3394,9 @@ def ParameterScanGenerator(path_to_config,ScanParams,ValuePool,save_path,
             lengthOrig = length
             
         elif ScanP == 'Plummer_Radius':
-            
-            Orp =  MeshSpacing(resol,length,length_units, silent = True)
-            
+                       
             KeepSmooth = False
-            Units.append('Grid Spacing')
+            Units.append('xLength')
 
         else:
             raise ValueError('Unrecognized parameter type used.')
@@ -3468,9 +3466,9 @@ def ParameterScanGenerator(path_to_config,ScanParams,ValuePool,save_path,
             
             elif ScanParams[j] == 'Plummer_Radius':
                 
-                rP = Pool[iDiv] * Orp
+                rP = Pool[iDiv] * length
                 a = GenPlummer(rP,resol,length,length_units, silent = True)
-                PString = 'A'
+                PString = 'P'
             
             else:
                 raise ValueError('Unrecognized parameter type used.')
