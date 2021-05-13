@@ -29,7 +29,7 @@
         "Velocity Units": "km/s"
     },
     "Matter Particles": {
-	"Plummer Radius": 0.048
+	"Plummer Radius": 0.048,
         "Condition": [
             [
                 10,

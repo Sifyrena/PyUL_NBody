@@ -1784,8 +1784,6 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     t = convert(duration, duration_units, 't')
 
     t0 = convert(start_time, duration_units, 't')
-    
-    cmass = convert(central_mass, m_mass_unit, 'm')
 
     Density = convert(Density,density_unit,'d')
     
@@ -2324,9 +2322,6 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
                     else:
                         phiTM = ne.evaluate("phiTM-a*mT/sqrt(1+a**2*distarrayTM**2)")
 
-                    if b > 0:
-                        phiTM = phiTM * 1/2*(np.tanh((b-distarrayTM)*Steep)+1)
-
                     if (save_options[3]) and ((ix + 1) % its_per_save) == 0:
                         EGPCM += mT*QuickInterpolate(phiSP,lengthC,resol,np.array([TMx,TMy,TMz]))
             
@@ -2765,11 +2760,12 @@ def SmoothingReport(a,resol,clength, silent = True):
         print("  Radius outside which the fields are practically indistinguishable (Grids): %.0f" % rS)
         print("  Modified Potential HWHM (Grids): %.0f" % rQ)
 
-def MeshSpacing(resol,length,length_units):
+def MeshSpacing(resol,length,length_units, silent = False):
     clength = convert(length,length_units,'l')
     lengthpc = convert_back(clength,'pc','l')
-    printU(f'Each grid spacing is {length/resol:.3f}{length_units}, this is {lengthpc:.3f}pc.','Mesh')
-    return clength/resol
+    if not silent:
+        printU(f'Each grid spacing is {length/resol:.3f}{length_units}, this is {lengthpc:.3f}pc.','Mesh')
+    return length/resol
     
 def GenPlummer(rP,resol,length,length_units, silent = False):
     a = convert_back(1/rP,length_units,'l')
@@ -3398,8 +3394,11 @@ def ParameterScanGenerator(path_to_config,ScanParams,ValuePool,save_path,
             lengthOrig = length
             
         elif ScanP == 'Plummer_Radius':
+            
+            Orp =  MeshSpacing(resol,length,length_units, silent = True)
+            
             KeepSmooth = False
-            Units.append(length_units)
+            Units.append('Grid Spacing')
 
         else:
             raise ValueError('Unrecognized parameter type used.')
@@ -3422,7 +3421,6 @@ def ParameterScanGenerator(path_to_config,ScanParams,ValuePool,save_path,
             iDisp = i
 
             iDiv = iDisp // PreDim % NPar 
-
 
             # Value Lookup
             
@@ -3470,7 +3468,7 @@ def ParameterScanGenerator(path_to_config,ScanParams,ValuePool,save_path,
             
             elif ScanParams[j] == 'Plummer_Radius':
                 
-                rP = Pool[iDiv]
+                rP = Pool[iDiv] * Orp
                 a = GenPlummer(rP,resol,length,length_units, silent = True)
                 PString = 'A'
             
