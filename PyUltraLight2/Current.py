@@ -105,7 +105,7 @@ SSLength = 5
 def printU(Message,SubSys = 'Sys'):
     print(f"{Version}.{SubSys.rjust(SSLength)}: {Message}")
 ####################### AUX. FUNCTION TO GENERATE PROGRESS BAR
-def prog_bar(iteration_number, progress, tinterval,status = '',adtl = ''):
+def prog_bar(iteration_number = 100, progress = 1, tinterval = 0 ,status = '',adtl = ''):
     size = 12
     ETAStamp = time.time() + (iteration_number - progress)*tinterval
     
@@ -2500,17 +2500,17 @@ def SSEst(SO, save_number, resol):
     
     
 
-def DSManagement(save_path):
+def DSManagement(save_path, Force = False):
     
     print('[',save_path,']',": The current size of the folder is", round(get_size(save_path)/1024**2,3), 'Mib')
 
     if get_size(save_path) == 0:
         cleardir = 'N'
-    else:
+    elif not Force:
         print('[',save_path,']',": Do You Wish to Delete All Files Currently Stored In This Folder? [Y] \n")
         cleardir = str(input())
     
-    if cleardir == 'Y':
+    if cleardir == 'Y' or Force:
         import shutil 
         shutil.rmtree(save_path)
         print("Folder Cleaned! \n")
@@ -2764,13 +2764,16 @@ def MeshSpacing(resol,length,length_units, silent = False):
     clength = convert(length,length_units,'l')
     lengthpc = convert_back(clength,'pc','l')
     if not silent:
-        printU(f'Each grid spacing is {length/resol:.3f}{length_units}, this is {lengthpc:.3f}pc.','Mesh')
+        printU(f'Each grid spacing is {length/resol:.3f}{length_units}, this is {lengthpc/resol:.3f}pc.','Mesh')
     return length/resol
     
-def GenPlummer(rP,resol,length,length_units, silent = False):
+def GenPlummer(rP,length_units, silent = True, resol = 0,length = 0):
     a = convert_back(1/rP,length_units,'l')
-    clength = convert(length,length_units,'l')
-    SmoothingReport(a,resol,clength, silent = silent)
+    
+    if not silent:
+        clength = convert(length,length_units,'l')
+
+        SmoothingReport(a,resol,clength, silent = silent)
     return a # IN CODE UNITS (LENGTH^-1)
     
 def RecPlummer(a,length_units):   
@@ -3028,8 +3031,6 @@ def Runs(save_path, Automatic = True):
 
 def LoadConfig(loc):
         
-        central_mass = 0
-        
         configfile = loc + '/config.uldm'
         
         with open(configfile) as json_file:
@@ -3090,7 +3091,7 @@ def LoadConfig(loc):
         try:
             rP = config["Matter Particles"]["Plummer Radius"]
             
-            a = GenPlummer(rP,resol,length,length_units, silent = True)
+            a = GenPlummer(rP,length_units)
             
         except KeyError:
             
@@ -3449,7 +3450,7 @@ def ParameterScanGenerator(path_to_config,ScanParams,ValuePool,save_path,
                 
             elif ScanParams[j] == 'U_v':
                 
-                UVel[1] = Pool[iDiv]  
+                UVel[1] = -1*Pool[iDiv]  
                 PString = 'U'
                 
             elif ScanParams[j] == 'Step_Factor':
@@ -3467,7 +3468,7 @@ def ParameterScanGenerator(path_to_config,ScanParams,ValuePool,save_path,
             elif ScanParams[j] == 'Plummer_Radius':
                 
                 rP = Pool[iDiv] * length
-                a = GenPlummer(rP,resol,length,length_units, silent = True)
+                a = GenPlummer(rP,length_units)
                 PString = 'P'
             
             else:
