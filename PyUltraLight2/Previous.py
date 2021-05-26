@@ -1,6 +1,6 @@
 Version   = str('PyUL2') # Handle used in console.
 D_version = str('Build 2021 May 13') # Detailed Version
-S_version = 22.0 # Short Version
+S_version = 21.3 # Short Version
 
 # Housekeeping
 import time
@@ -90,16 +90,6 @@ def IOSave(loc,Type,save_num,save_format = 'npy',data = []):
 def IOLoad_npy(loc,Type,save_num):
     return np.load(f"{loc}/Outputs/{IOName(Type)}_#{save_num:03d}.npy")
 
-def CreateStream(loc):
-    file = open(f'{loc}/NBStream.uldm', "w+")
-    file.write(f'{Version}: NBody State Stream File')
-    file.close()
-    
-def NBStream(loc,Message):
-    file = open(f'{loc}/NBStream.uldm', "a")
-    file.write("\n")
-    file.write(f'{Message}')
-    file.close()
 
 ### AUX. FUNCTION TO GENERATE TIME STAMP
 
@@ -957,7 +947,7 @@ def FWNBody_NI(t,TMState,masslist,phiSP,a,lengthC,resol):
 FWNBody3 = FWNBody
 FWNBody3_NI = FWNBody_NI
 
-def NBodyAdvance(TMState,h,masslist,phiSP,a,lengthC,resol,NS,loc = '',Stream = False, StreamChar = ''):
+def NBodyAdvance(TMState,h,masslist,phiSP,a,lengthC,resol,NS):
         #
         if NS == 0: # NBody Dynamics Off
             
@@ -984,9 +974,6 @@ def NBodyAdvance(TMState,h,masslist,phiSP,a,lengthC,resol,NS,loc = '',Stream = F
                 TMK3, Trash = FWNBody3(0,TMState + H/2*TMK2,masslist,phiSP,a,lengthC,resol)
                 TMK4, GradientLog = FWNBody3(0,TMState + H*TMK3,masslist,phiSP,a,lengthC,resol)
                 TMState = TMState + H/6*(TMK1+2*TMK2+2*TMK3+TMK4)
-                
-                if Stream:
-                    NBStream(loc,TMState[StreamChar])
                 
             TMStateOut = TMState
 
@@ -1624,7 +1611,7 @@ def ULRead(InitPath):
     
     return psi
 
-def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal = False, UseInit = False, IsoP = False, UseDispSponge = False, SelfGravity = True, NBodyInterp = True, NBodyGravity = True, Shift = False, Simpson = False, Silent = False, AutoStop = False, AutoStop2 = False, WellThreshold = 100, InitPath = '', InitWeight = 1, Message = '', Stream = False, StreamChar = [0]):
+def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal = False, UseInit = False, IsoP = False, UseDispSponge = False, SelfGravity = True, NBodyInterp = True, NBodyGravity = True, Shift = False, Simpson = False, Silent = False, AutoStop = False, AutoStop2 = False, WellThreshold = 100, InitPath = '', InitWeight = 1, Message = ''):
     
     if run_folder == "":
         return
@@ -1725,9 +1712,6 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     # External Credits Print
     PyULCredits(IsoP,UseDispSponge,embeds)
     # Embedded particles are Pre-compiled into the list.
-    if Stream:
-        CreateStream(loc)
-        printU("Created stream file at root folder for variables {StreamChar}.",'NBody')
     
     if not Uniform:
         Density = 0
@@ -2268,10 +2252,6 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     PBEDisp = ''
     #####################################################################################LOOP
     for ix in range(actual_num_steps):
-        
-        if Stream:
-            NBStream(loc,f'Taking ULDM Step {ix} @ {GenFromTime()}')
-        
         TIntegrate += h
         prog_bar(actual_num_steps, ix + 1, tint,'FT',PBEDisp)
         if HaSt == 1:
@@ -2314,7 +2294,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         
         if NBodyInterp:
 
-            TMState, GradientLog = NBodyAdvance(TMState,h,masslist,phiSP,a,lengthC,resol,NS, loc, Stream, StreamChar)
+            TMState, GradientLog = NBodyAdvance(TMState,h,masslist,phiSP,a,lengthC,resol,NS)
             
         else:
 
