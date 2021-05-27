@@ -1,6 +1,6 @@
 Version   = str('PyUL2') # Handle used in console.
-D_version = str('Build 2021 May 13') # Detailed Version
-S_version = 22.0 # Short Version
+D_version = str('Build 2021 May 25') # Detailed Version
+S_version = 22.1 # Short Version
 
 # Housekeeping
 import time
@@ -26,8 +26,16 @@ pi = np.pi
 eV = 1.783e-36 # kg*c^2
 
 # ULDM:
-axion_E = 1e-22
 
+#m22L = float(input())
+axion_E = float(input('Axion Mass (eV).') or 1e-22)
+
+SSLength = 5
+
+def printU(Message,SubSys = 'Sys'):
+    print(f"{Version}.{SubSys.rjust(SSLength)}: {Message}")
+    
+printU(f"Axion Mass: {axion_E:.2g}", 'Universe')
 # CDM Clumps:
 #axion_E = 2e-5
 
@@ -90,15 +98,22 @@ def IOSave(loc,Type,save_num,save_format = 'npy',data = []):
 def IOLoad_npy(loc,Type,save_num):
     return np.load(f"{loc}/Outputs/{IOName(Type)}_#{save_num:03d}.npy")
 
-def CreateStream(loc):
+def CreateStream(loc, NS = 32, Target = 'Undefined', StreamChar = [0]):
     file = open(f'{loc}/NBStream.uldm', "w+")
-    file.write(f'{Version}: NBody State Stream File')
+    file.write(f'{Version}: NBody State Stream File.\nRK4 N body Steps Per ULDM Step: {NS//4:.0f}\nTarget v: {Target}\nVectorised TMState loci printed: {StreamChar}')
     file.close()
     
 def NBStream(loc,Message):
     file = open(f'{loc}/NBStream.uldm', "a")
     file.write("\n")
-    file.write(f'{Message}')
+    
+    if type(Message) == np.ndarray:
+        MesList = Message.tolist()
+        
+        for Mes in MesList:
+            file.write(f'{Mes:.16f}, ')
+    else:
+        file.write(f'{Message}')
     file.close()
 
 ### AUX. FUNCTION TO GENERATE TIME STAMP
@@ -110,10 +125,6 @@ def GenFromTime():
     
     return timestamp
 
-SSLength = 5
-
-def printU(Message,SubSys = 'Sys'):
-    print(f"{Version}.{SubSys.rjust(SSLength)}: {Message}")
 ####################### AUX. FUNCTION TO GENERATE PROGRESS BAR
 def prog_bar(iteration_number = 100, progress = 1, tinterval = 0 ,status = '',adtl = ''):
     size = 12
@@ -1725,10 +1736,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     # External Credits Print
     PyULCredits(IsoP,UseDispSponge,embeds)
     # Embedded particles are Pre-compiled into the list.
-    if Stream:
-        CreateStream(loc)
-        printU("Created stream file at root folder for variables {StreamChar}.",'NBody')
-    
+        
     if not Uniform:
         Density = 0
         UVel = [0,0,0]
@@ -1869,6 +1877,12 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     MassCom = Density*lengthC**3
 
     UVelocity = convert(np.array(UVel),s_velocity_unit, 'v')
+    
+    VTot = np.linalg.norm(UVelocity)
+    
+    if Stream:
+        CreateStream(loc, NS, VTot,StreamChar)
+        printU("Created stream file at root folder for variables {StreamChar}.",'NBody')
 
     if AutoStop and NumTM == 1:
         ThresholdVelocity = -1*UVelocity[1]
@@ -2268,10 +2282,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     PBEDisp = ''
     #####################################################################################LOOP
     for ix in range(actual_num_steps):
-        
-        if Stream:
-            NBStream(loc,f'Taking ULDM Step {ix} @ {GenFromTime()}')
-        
+                
         TIntegrate += h
         prog_bar(actual_num_steps, ix + 1, tint,'FT',PBEDisp)
         if HaSt == 1:
@@ -2348,7 +2359,6 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         if AutoStop and len(particles) == 1:
             velocity = TMState[3:6]
             Vdisp = np.linalg.norm(velocity)
-            VTot = np.linalg.norm(UVelocity)
             PBEDisp = f'[V={Vdisp:.2f} / Tg.V={VTot:.2f}]'
             
         if SelfGravity:
@@ -3268,7 +3278,8 @@ def PopulateBHWithStars(particles,rIn = 0.4, rOut = 1.2,InBias = 0, NStars = 10,
     return particles
 
 
-def SolEst(mass,length,resol,mass_unit = '',length_units = '', Plot = False, Density = 0, density_unit = ''): # Only deals with default solitons!
+def SolEst(mass,length,resol,mass_unit = '',length_units = '', Plot = False, Density = 0, density_unit = ''): 
+    # Only deals with default solitons!
     import matplotlib.pyplot as plt
     
     code_mass = convert(mass,mass_unit,'m')
@@ -3313,7 +3324,8 @@ def SolEst(mass,length,resol,mass_unit = '',length_units = '', Plot = False, Den
         return codeHWHM
     
     except IndexError:
-        print('Soliton too wide!')
+        print('Soliton too wide or too narrow!')
+        print(f'Central value: {funct[0]}',f'Minimum value: {np.min(funct)}')
         return 0
 
 SolitonSizeEstimate = SolEst   
@@ -3523,7 +3535,7 @@ DensityEstimator = RhoEst
 
 def VizInit2D(length,length_units,resol,embeds,
               solitons,s_position_unit, s_mass_unit,
-              particles,m_position_unit, Uniform, Density, UVel):
+              particles,m_position_unit, Uniform, Density, UVel, VScale = 1):
     
     print(length_units)
     particles, solitons, embeds = EmbedParticle(particles,embeds,solitons)
@@ -3547,12 +3559,21 @@ def VizInit2D(length,length_units,resol,embeds,
         circ = plt.Circle((position[1],position[0]),HWHM,fill = False)
         
         ax.add_patch(circ)
+        
+        velocity = np.array(soliton[2])
+        
+        if np.linalg.norm(velocity) != 0:
+            ax.quiver(position[1],position[0],velocity[1],velocity[0],scale = VScale)
     
     for i,particle in enumerate(particles):
         #print(f"Visualizing TM #{i}")
         position = convert_between(np.array(particle[1]),m_position_unit,length_units,'l')
         
+        velocity = np.array(particle[2])
+        
         ax.scatter(position[1],position[0])
+        if np.linalg.norm(velocity) != 0:
+            ax.quiver(position[1],position[0],velocity[1],velocity[0], scale = VScale)
         
     for i,embed in enumerate(embeds):
         #print(f"Visualizing Embedded Soliton #{i} (Approximate)")
