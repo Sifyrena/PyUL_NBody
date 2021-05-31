@@ -1,6 +1,6 @@
 Version   = str('PyUL2') # Handle used in console.
 D_version = str('Build 2021 May 25') # Detailed Version
-S_version = 22.1 # Short Version
+S_version = 22.2 # Short Version
 
 # Housekeeping
 import time
@@ -115,6 +115,15 @@ def NBStream(loc,Message):
     else:
         file.write(f'{Message}')
     file.close()
+    
+def NBDensity(loc,Density):
+    file = open(f'{loc}/LocalDensities.uldm', "a+")
+    file.write(f'{Density:.8f}')  
+    file.close()
+    
+def ReadLocalDensity(loc):
+    with open(f'{loc}/LocalDensities.uldm', "r") as file:
+        return float(file.read())
 
 ### AUX. FUNCTION TO GENERATE TIME STAMP
 
@@ -528,6 +537,24 @@ def initsoliton(funct, xarray, yarray, zarray, position, alpha, f, delta_x,Cutof
     return funct
 
 
+############################FUNCTION TO PUT SPHERICAL SOLITON DENSITY PROFILE INTO 3D BOX (Uses pre-computed array)
+
+def initsolitonRadial(line, alpha, f, delta_x,Cutoff = 5.6):
+    funct = 0*line
+    
+    for index in np.ndindex(funct.shape):
+        
+        
+        # Note also that this distfromcentre is here to calculate the distance of every gridpoint from the centre of the soliton, not to calculate the distance of the soliton from the centre of the grid
+        distfromcentre = (
+            (line[index[0]]) ** 2) ** 0.5
+        # Utilises soliton profile array out to dimensionless radius 5.6.
+        if (np.sqrt(alpha) * distfromcentre <= Cutoff):
+         
+            funct[index] = alpha * f[int(np.sqrt(alpha) * (distfromcentre / delta_x + 1))]
+
+    return funct
+
 """
 Save various properties of the various grids in various formats
 """
@@ -611,10 +638,11 @@ def calculate_energies(rho, Vcell, phiSP,phiTM, psi, karray2, fft_psi, ifft_func
 
     rho = rho.real
     
-    if Uniform:
-        BoxAvg = np.mean(rho) # TEMPORARILY DISABLED!
-    else:
-        BoxAvg = 0
+    #if Uniform:
+    #    BoxAvg = np.mean(rho) # SHOULD BE TEMPORARILY DISABLED!
+    #else:
+    
+    BoxAvg = 0
 
     # Gravitational potential energy density associated with the point masses potential
 
@@ -645,11 +673,6 @@ def calculate_energies(rho, Vcell, phiSP,phiTM, psi, karray2, fft_psi, ifft_func
     # Total mass compared to background.
     Mtot = np.sum(rho)*Vcell
     mtotlist.append(Mtot)
-
-# CALCULATE_ENERGIES_F, NEW VERSION IN 2.20
-
-# Evaluating ∫ ∫ ∫ H d^3x using one higher order!
-
 
 ### Toroid or something
         
@@ -1040,11 +1063,12 @@ def NBodyAdvance_NI(TMState,h,masslist,phiSP,a,lengthC,resol,NS):
 
 ######################### Soliton Init Factory Setting!
 
-def LoadDefaultSoliton():
+def LoadDefaultSoliton(Silent = True):
     
     f = np.load('./Soliton Profile Files/initial_f.npy')
     
-    printU(f"\n{Version} Loaded original PyUL soliton profiles.",'Load Soliton')
+    if not Silent:
+        printU(f"\n{Version} Loaded original PyUL soliton profiles.",'Load Soliton')
     
     return f
 
@@ -1868,7 +1892,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         DensityCom = MassCom / resol**3
 
         print('========================Dispersive Background====================================')
-        printU(f"Solitons overridden with a pre-generated wavefunction with pseudorandom phase.",'Init')
+        printU(f"Added a pre-generated wavefunction with pseudorandom phase.",'Init')
         
     # INITIALISE SOLITONS WITH SPECIFIED MASS, POSITION, VELOCITY, PHASE
 
@@ -1893,7 +1917,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     
     if Uniform:
         print('========================Uniform Background====================================')
-        printU(f"Solitons overridden with a uniform wavefunction with no phase.",'Init')
+        printU(f"Added a uniform wavefunction with no phase.",'Init')
         printU(f"Background ULDM mass in domain is {MassCom:.4f}, at {Density:.4f} per grid.",'Init')
         printU(f"Background Global velocity is (x,y,z): {UVel[1]},{UVel[0]},{UVel[2]}.",'Init')
         print('==============================================================================')
@@ -2107,15 +2131,18 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     for MI, particle in enumerate(particles):
                
         mT = convert(particle[0], m_mass_unit, 'm')
+        masslist.append(mT)
+
+        position = convert(np.array(particle[1]), m_position_unit, 'l')
         
         if mT == 0:
             printU(f"Particle #{MI} loaded as observer.",'NBody')
         else:
-            printU(f"Particle #{MI} loaded, with (code) mass {mT:.3f}",'NBody')
-        
-        masslist.append(mT)
+            
+            DensityInit = QuickInterpolate(rho,lengthC,resol,position)
+            printU(f"Particle #{MI} mass {mT:.5f} and local density {DensityInit:.5f} (code units).",'NBody')
+            NBDensity(loc,DensityInit)
 
-        position = convert(np.array(particle[1]), m_position_unit, 'l')
         
         if Shift:
             position = GridShift(position, lengthC, resol)
@@ -2234,7 +2261,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     
 
     ########################################################################################## 
-    # Chapel Code From Yale Cosmology.
+    # From Yale Cosmology.
   
     if UseDispSponge:
         
@@ -3535,23 +3562,24 @@ DensityEstimator = RhoEst
 
 def VizInit2D(length,length_units,resol,embeds,
               solitons,s_position_unit, s_mass_unit,
-              particles,m_position_unit, Uniform, Density, UVel, VScale = 1):
+              particles,m_position_unit, Uniform, Density, UVel, rP, VScale = 1):
     
-    print(length_units)
     particles, solitons, embeds = EmbedParticle(particles,embeds,solitons)
+    
+    
     import matplotlib.pyplot as plt
+    
     PR = np.linspace(-length/2,length/2,resol,endpoint = False)
     
     fig = plt.figure(figsize=(12, 12))
     ax = fig.add_subplot(111)
     
     for i,soliton in enumerate(solitons):
-        #print(f"Visualizing Soliton #{i}")
+
         mass = soliton[0]
         
         HWHM = SolEst(mass,length,resol,s_mass_unit,length_units)
-        #print(f"FW WAS HERE {HWHM}")
-        
+
         HWHM = convert_back(HWHM,length_units,'l')
         
         position = convert_between(np.array(soliton[1]),s_position_unit,length_units,'l')
@@ -3566,10 +3594,14 @@ def VizInit2D(length,length_units,resol,embeds,
             ax.quiver(position[1],position[0],velocity[1],velocity[0],scale = VScale)
     
     for i,particle in enumerate(particles):
-        #print(f"Visualizing TM #{i}")
+
+        
         position = convert_between(np.array(particle[1]),m_position_unit,length_units,'l')
         
         velocity = np.array(particle[2])
+        
+        circ = plt.Circle((position[1],position[0]),rP,fill = False)
+        ax.add_patch(circ)
         
         ax.scatter(position[1],position[0])
         if np.linalg.norm(velocity) != 0:
@@ -3592,14 +3624,20 @@ def VizInit2D(length,length_units,resol,embeds,
     ax.set_ylim(PR[0],PR[-1])
     ax.set_xlim(PR[0],PR[-1])
     
-    ax.set_xlabel(f'x / {length_units}')
-    ax.set_ylabel(f'y / {length_units}')
-    ax.grid()
+    ax.set_xlabel(f'$x$')
+    ax.set_ylabel(f'$y$')
+    ax.grid(color = 'k',alpha = 0.3)
     
     if Uniform:
         if UVel[1]**2 + UVel[0]**2 != 0:
             ax.quiver(0.75,0.75,UVel[1],UVel[0])
         ax.text(0.75,0.75,f'Density: {Density}')
+    
+    ax.set_xticks(PR)
+    ax.set_yticks(PR)
+    
+    ax.set_xticklabels([])
+    ax.set_yticklabels([])
     
     return fig, ax
 
@@ -3697,9 +3735,46 @@ def GridShift(position, lengthC, resol, direction = '-'):
 def GetRel(array):
     return array - array[0]
 
-class Universe():
-    H = 1
+
+def DefaultSolitonOrbit(resol,length, length_units, s_mass, s_mass_unit, m_radius, m_position_unit, m_velocity_unit = '', Silent = True):
     
-class Simulation():
-    Data = {}
-            
+    lengthC = convert(length,length_units,'l')
+    s_massC = convert(s_mass,s_mass_unit,'m')
+    m_radiC = convert(m_radius,m_position_unit,'l')
+    
+    
+    if m_radiC >= lengthC/2:
+        raise ValueError("Supplied orbital radius too large!")
+    
+    linearray = np.linspace(0,lengthC/2,4*resol,endpoint = False)
+    
+    lineh = linearray[1] - linearray[0]
+
+    f = LoadDefaultSoliton()
+
+    delta_x = 0.00001
+
+    alpha = (s_massC / 3.883) ** 2
+
+    funct = np.abs(initsolitonRadial(linearray, alpha, f, delta_x,Cutoff = 5.6))**2
+    
+    if not Silent:
+        import matplotlib.pyplot as plt
+
+        plt.plot(linearray,funct)
+        plt.xlabel('Code Length')
+        plt.ylabel('Code Density')
+        
+        plt.vlines(m_radiC,np.min(funct),np.max(funct))
+        
+    CutOff = np.where(linearray >= m_radiC)[0][0]
+    
+    Integrand = linearray[0:CutOff]**2 * funct[0:CutOff]
+    from scipy import integrate as SINT
+    MInt = 4*np.pi*SINT.simps(Integrand, x = linearray[0:CutOff])
+    
+    VC = np.sqrt(MInt/m_radiC)
+    
+    return convert_back(MInt, s_mass_unit,'m'), convert_back(VC,m_velocity_unit,'v')
+
+    
