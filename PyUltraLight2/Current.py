@@ -1,6 +1,6 @@
 Version   = str('PyUL2') # Handle used in console.
-D_version = str('Build 2021 May 25') # Detailed Version
-S_version = 22.2 # Short Version
+D_version = str('Build 2021 Jun 01') # Detailed Version
+S_version = 22.3 # Short Version
 
 # Housekeeping
 import time
@@ -402,6 +402,15 @@ def convert(value, unit, type):
             converted = value / mass_unit * length_unit**3
         else:
             raise NameError('Unsupported DENSITY unit used')
+            
+            
+    elif (type == 'a'):
+        if (unit == ''):
+            converted = value
+        elif (unit == 'm/s2'):
+            converted = value / length_unit * time_unit**2   
+        else:
+            raise NameError('Unsupported DENSITY unit used')
 
     else:
         raise TypeError('Unsupported conversion type')
@@ -489,6 +498,14 @@ def convert_back(value, unit, type):
         else:
             raise NameError('Unsupported DENSITY unit used')
 
+    elif (type == 'a'):
+        if (unit == ''):
+            converted = value
+        elif (unit == 'm/s2'):
+            converted = value * length_unit / time_unit**2   
+        else:
+            raise NameError('Unsupported DENSITY unit used')        
+            
     else:
         raise TypeError('Unsupported conversion type')
 
@@ -3777,4 +3794,41 @@ def DefaultSolitonOrbit(resol,length, length_units, s_mass, s_mass_unit, m_radiu
     
     return convert_back(MInt, s_mass_unit,'m'), convert_back(VC,m_velocity_unit,'v')
 
+
+# Numerical Values Cited From Hui L. et al
     
+rho0 = 0.00440
+phi0 = 0.3155
+f0 = 3.9251
+epi0 = 0.16277
+w0 = 0.10851
+    
+class Soliton_Ground:
+   
+    def __init__(self, M = 1, M_unit = ''):      
+        self.M = convert_between(M,M_unit,'kg','m')
+        self.ma = axion_mass
+    
+    def CoreDensity(self, unit = ''):
+        M = self.M
+        ma = self.ma
+        value = (G*ma**2/hbar**2)**3 * M**4 * rho0
+        return convert_between(value,'kg/m3',unit,'d')
+
+    def CoreField(self, unit = ''):
+        M = self.M
+        ma = self.ma
+        value = -1*(G*M*ma/hbar)**2 * phi0
+        return convert_between(value,'m/s2',unit,'a')
+
+    def rHWHM(self, unit = ''):
+        M = self.M
+        ma = self.ma
+        value = hbar**2/(G*M*ma**2)*f0
+        return convert_between(value,'m',unit,'l')
+
+    def VirialV(self, unit = ''):
+        M = self.M
+        ma = self.ma
+        value = G*M*ma/hbar * w0 **(1/2)
+        return convert_between(value,'m/s',unit,'v')
