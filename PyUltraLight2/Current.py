@@ -1,6 +1,6 @@
 Version   = str('PyUL2') # Handle used in console.
 D_version = str('Build 2021 Jun 01') # Detailed Version
-S_version = 22.3 # Short Version
+S_version = 22.4 # Short Version
 
 # Housekeeping
 import time
@@ -1676,9 +1676,10 @@ def ULRead(InitPath):
     
     return psi
 
-def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal = False, UseInit = False, IsoP = False, UseDispSponge = False, SelfGravity = True, NBodyInterp = True, NBodyGravity = True, Shift = False, Simpson = False, Silent = False, AutoStop = False, AutoStop2 = False, WellThreshold = 100, InitPath = '', InitWeight = 1, Message = '', Stream = False, StreamChar = [0]):
+def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal = False, UseInit = False, IsoP = False, UseDispSponge = False, SelfGravity = True, NBodyInterp = True, NBodyGravity = True, Shift = False, Simpson = False, Silent = False, AutoStop = False, AutoStop2 = False,AutoStop3 = False, KEThreshold = 0.9, WellThreshold = 100, InitPath = '', InitWeight = 1, Message = '', Stream = False, StreamChar = [0]):
     
     if run_folder == "":
+        printU('Nothing done!','IO')
         return
     
     clear_output()
@@ -1753,7 +1754,9 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     })
     
     PyULConfig["Stopping Conditions"] = ({
-    "When N body #0 Stops": AutoStop,
+    "When body #0 Stops": AutoStop,
+    "When body #0 Loses Significant Energy": AutoStop3,
+    "Energy Loss Factor": KEThreshold,
     "When Field Exceeds Limit": AutoStop2,
     "Depth Factor" : WellThreshold,
     })
@@ -2933,6 +2936,7 @@ def GenerateConfig(NS, length, length_units, resol, duration, duration_units, st
         
         if InputName == "ABORT":
             return ""
+        
         elif InputName != "":
             timestamp = InputName
         else:
@@ -3763,7 +3767,7 @@ def DefaultSolitonOrbit(resol,length, length_units, s_mass, s_mass_unit, m_radiu
     if m_radiC >= lengthC/2:
         raise ValueError("Supplied orbital radius too large!")
     
-    linearray = np.linspace(0,lengthC/2,4*resol,endpoint = False)
+    linearray = np.linspace(0,lengthC/2,100000,endpoint = False)
     
     lineh = linearray[1] - linearray[0]
 
@@ -3783,8 +3787,11 @@ def DefaultSolitonOrbit(resol,length, length_units, s_mass, s_mass_unit, m_radiu
         plt.ylabel('Code Density')
         
         plt.vlines(m_radiC,np.min(funct),np.max(funct))
-        
-    CutOff = np.where(linearray >= m_radiC)[0][0]
+    
+    try:
+        CutOff = np.where(linearray >= m_radiC)[0][0]
+    except:
+        CutOff = len(linearray)
     
     Integrand = linearray[0:CutOff]**2 * funct[0:CutOff]
     from scipy import integrate as SINT
@@ -3805,8 +3812,22 @@ w0 = 0.10851
     
 class Soliton_Ground:
    
-    def __init__(self, M = 1, M_unit = ''):      
+    def __init__(self, statevec = [], M_unit = '', M = 1, position = [0,0,0], velocity = [0,0,0], phase = 0):      
+        
+        if statevec != []:
+            if len(statevec) == 4:
+                M = statevec[0]
+                position = statevec[1]
+                velocity = statevec[2]
+                phase = statevec[3]
+            else:
+                raise RuntimeError("State vector supplied is broken.")
+        
+        
         self.M = convert_between(M,M_unit,'kg','m')
+        self.pos = position
+        self.vel = velocity
+        self.phase = phase
         self.ma = axion_mass
     
     def CoreDensity(self, unit = ''):
@@ -3832,3 +3853,4 @@ class Soliton_Ground:
         ma = self.ma
         value = G*M*ma/hbar * w0 **(1/2)
         return convert_between(value,'m/s',unit,'v')
+    
