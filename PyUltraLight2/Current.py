@@ -1,6 +1,6 @@
 Version   = str('PyUL2') # Handle used in console.
 D_version = str('Build 2021 Jun 01') # Detailed Version
-S_version = 22.4 # Short Version
+S_version = 22.43 # Short Version
 
 # Housekeeping
 import time
@@ -28,14 +28,16 @@ eV = 1.783e-36 # kg*c^2
 # ULDM:
 
 #m22L = float(input())
-axion_E = float(input('Axion Mass (eV).') or 1e-22)
+#axion_E = float(input('Axion Mass (eV).') or 1e-22)
+
+axion_E = 1e-22
 
 SSLength = 5
 
 def printU(Message,SubSys = 'Sys'):
     print(f"{Version}.{SubSys.rjust(SSLength)}: {Message}")
     
-printU(f"Axion Mass: {axion_E:.2g}", 'Universe')
+printU(f"Axion Mass: {axion_E:.2g} eV.", 'Universe')
 # CDM Clumps:
 #axion_E = 2e-5
 
@@ -136,7 +138,7 @@ def GenFromTime():
 
 ####################### AUX. FUNCTION TO GENERATE PROGRESS BAR
 def prog_bar(iteration_number = 100, progress = 1, tinterval = 0 ,status = '',adtl = ''):
-    size = 12
+    size = 10
     ETAStamp = time.time() + (iteration_number - progress)*tinterval
     
     ETA = datetime.fromtimestamp(ETAStamp).strftime("%d/%m/%Y, %H:%M:%S")
@@ -315,7 +317,7 @@ def isolatedPotential(rho, green, l, fft_X, ifft_X, fft_plane, ifft_plane):
     # the for loop
     for i in range(0,2*n):
         plane = rhopad[i, :, :]
-        rhopad[i, :, :] = PC_jit(green[ndx[i], :, :], plane, n, fft_plane, ifft_plane) #make sure this indexing works 
+        rhopad[i, :, :] = PC_jit(green[ndx[i], :, :], plane, n, fft_plane, ifft_plane)
     # - - - - - - - - - - - - - - - - - - - - - -    
     #rhopad = (1/n**2) * scipy.fftpack.ifftn(rhopad, axes = (0,)) #inverse transform x-axis
     rhopad = (1/n**2) * ifft_X(rhopad) # normalization
@@ -2846,7 +2848,6 @@ def MeshSpacing(resol,length,length_units, silent = False):
     
 def GenPlummer(rP,length_units, silent = True, resol = 0,length = 0):
     a = convert_back(1/rP,length_units,'l')
-    
     if not silent:
         clength = convert(length,length_units,'l')
 
@@ -3205,9 +3206,12 @@ def NBodyEnergy(MassListSI,TMDataSI,EndNum,a=0,length_units = ''): # kg, m, m/s,
         printU('Using Standard Newtonian Potential.', 'NBoE')
     
     else:
-        ADim = convert(a,length_units,'l')
+        
+        rP =  RecPlummer(a,length_units)
+
+        ADim = 1/rP
     
-        printU(f'The dimensionful a is {ADim:.4f}({length_units})^(-1)', 'NBoE')
+        printU(f'The Plummer Radius is {rP:.4f}({length_units})', 'NBoE')
     
     NBo = len(MassListSI)
     
@@ -3262,7 +3266,7 @@ def FOSR(m,r):
 def FOSU(m,r):
     return np.sqrt(m/r)
 
-def PopulateWithStars(embeds,particles,rIn = 0.4,rOut = 1.2,InBias = 0, NStars = 10, MassMax = 1e-5):
+def PopulateWithStars(NStars, MaxMass, embeds, particles, resol, length, length_units, s_mass_unit, m_position_unit, m_velocity_unit, rIn = 0.4, rOut = 1.2):
 
     for Halo in embeds:
               
@@ -3270,15 +3274,22 @@ def PopulateWithStars(embeds,particles,rIn = 0.4,rOut = 1.2,InBias = 0, NStars =
         GVel = np.array(Halo[2])
         GMass = Halo[0]
         GRatio = Halo[3]
-        Scale = GRatio*0.5 + 0.5
+        
+        SolMass = GMass * (1-GRatio)
+        
+        SolSizeC = SolEst(SolMass,length,resol,mass_unit = s_mass_unit,length_units = length_units)
+        
+        SolSizeL = convert_between(SolSizeC,'',length_units,'l')
         
         for i in range(NStars):
 
-            r = (np.random.random()*(rOut-rIn) + rIn)
+            r = (np.random.random()*(rOut-rIn) + rIn) * SolSizeL
+            
+            Mass = MaxMass*np.random.random()
 
             theta = 2*np.pi*np.random.random()
             
-            v = FOSR(GMass,r) * Scale
+            m_temp, v = DefaultSolitonOrbit(resol,length, length_units, SolMass, s_mass_unit, r, m_position_unit, m_velocity_unit)
 
             Position = np.array([r*np.cos(theta),r*np.sin(theta),0]) + GPos
             
@@ -3286,7 +3297,7 @@ def PopulateWithStars(embeds,particles,rIn = 0.4,rOut = 1.2,InBias = 0, NStars =
             
             Velocity = np.array([v*np.sin(theta),-v*np.cos(theta),0])  + GVel
 
-            Mass = MassMax*np.random.random()
+            
 
             particles.append([Mass,Position.tolist(),Velocity.tolist()])
 
@@ -3386,14 +3397,6 @@ def DefaultDBL(v = 10,vUnit = 'm/s'):
 
 
 # Relevant for Paper 1
-def SliceFinderC(TMState,resol,length,verbose = False):
-
-    TMState = TMState[0:3]
-    RNum = (np.array(TMState)*1/length+1/2)*resol
-    RPt = np.floor(RNum)
-    if verbose:
-        print(f'The test mass particle #0 is closest to {RPt[0]}x,{RPt[1]}y,{RPt[2]}z in the data.')
-    return RPt
 
 def ParameterScanGenerator(path_to_config,ScanParams,ValuePool,save_path,
                            SaveSpace = False, KeepResol = True, KeepSmooth = False,
@@ -3757,7 +3760,7 @@ def GetRel(array):
     return array - array[0]
 
 
-def DefaultSolitonOrbit(resol,length, length_units, s_mass, s_mass_unit, m_radius, m_position_unit, m_velocity_unit = '', Silent = True):
+def DefaultSolitonOrbit(resol,length, length_units, s_mass, s_mass_unit, m_radius, m_position_unit, m_velocity_unit = '', Silent = True, Detail = 10000):
     
     lengthC = convert(length,length_units,'l')
     s_massC = convert(s_mass,s_mass_unit,'m')
@@ -3767,7 +3770,7 @@ def DefaultSolitonOrbit(resol,length, length_units, s_mass, s_mass_unit, m_radiu
     if m_radiC >= lengthC/2:
         raise ValueError("Supplied orbital radius too large!")
     
-    linearray = np.linspace(0,lengthC/2,100000,endpoint = False)
+    linearray = np.linspace(0,lengthC/2,Detail,endpoint = False)
     
     lineh = linearray[1] - linearray[0]
 
