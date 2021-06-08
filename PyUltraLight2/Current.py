@@ -1,6 +1,6 @@
 Version   = str('PyUL2') # Handle used in console.
-D_version = str('Build 2021 Jun 01') # Detailed Version
-S_version = 22.43 # Short Version
+D_version = str('Build 2021 Jun 08') # Detailed Version
+S_version = 23 # Short Version
 
 # Housekeeping
 import time
@@ -30,7 +30,7 @@ eV = 1.783e-36 # kg*c^2
 #m22L = float(input())
 #axion_E = float(input('Axion Mass (eV).') or 1e-22)
 
-axion_E = 1e-22
+axion_E = 1e-21
 
 SSLength = 5
 
@@ -38,8 +38,8 @@ def printU(Message,SubSys = 'Sys'):
     print(f"{Version}.{SubSys.rjust(SSLength)}: {Message}")
     
 printU(f"Axion Mass: {axion_E:.2g} eV.", 'Universe')
-# CDM Clumps:
-#axion_E = 2e-5
+
+################################## CONSTANTS ##################################
 
 axion_mass = axion_E * eV
 
@@ -52,7 +52,6 @@ light_year = 9.4607e15  # m
 solar_mass = 1.989e30  # kg
 
 G = 6.67e-11  # kg
-
 
 omega_m0 = 0.31
 
@@ -69,11 +68,12 @@ mass_unit = (3 * H_0 ** 2 * omega_m0 / (8 * pi)) ** 0.25 * hbar ** 1.5 / (axion_
 
 energy_unit = mass_unit * length_unit ** 2 / (time_unit**2)
     
-
+#####################################################################################
+    
 ### Internal Flags used for IO
-SFS = '3Density 3Wfn 2Density Energy 1Density NBody 3Grav 2Grav DF 2Phase Entropy 1Grav 3GravF 2GravF 1GravF'
+SFS = '3Density 3Wfn 2Density Energy 1Density NBody 3Grav 2Grav DF 2Phase Entropy 1Grav 3GravF 2GravF 1GravF 3UMmt 2UMmt 1UMmt Momentum AngMomentum'
 
-SNM = 'R3D P3D R2D EGY R1D NTM G3D G2D DYF A2D ENT G1D F3D F2D F1D'
+SNM = 'R3D P3D R2D EGY R1D NTM G3D G2D DYF A2D ENT G1D F3D F2D F1D V3D V2D V1D MTT MVR'
 
 SaveFlags = SFS.split()
 SaveNames = SNM.split()
@@ -1078,8 +1078,58 @@ def NBodyAdvance_NI(TMState,h,masslist,phiSP,a,lengthC,resol,NS):
 
             return TMStateOut, GradientLog
 
+######################### June Addition (Momentum)
 
+def MomentumFFT(DelT,A,CPsi,funct,resol,K,ifft_funct):
+    
+    DelT = ne.evaluate('1j*A*DelT')
+    Grid = ne.evaluate("1j*K*funct")   
+    DPs = ifft_funct(Grid)
 
+    return ne.evaluate('real(DelT - 1j*CPsi*DPs)')
+
+def MomentumEval(psi,funct,resol,spacing,Kx,Ky,Kz,ifft_funct):
+    
+    A = np.abs(psi)
+    
+    CPsi = np.conj(psi)
+    
+    DelTx, DelTy, DelTz = np.gradient(A, spacing)
+    
+    DelTx = MomentumFFT(DelTx,A,CPsi,funct,resol,Kx,ifft_funct)
+    DelTy = MomentumFFT(DelTy,A,CPsi,funct,resol,Ky,ifft_funct)
+    DelTz = MomentumFFT(DelTz,A,CPsi,funct,resol,Kz,ifft_funct)
+    
+
+    return np.array([np.sum(DelTx),np.sum(DelTy),np.sum(DelTz)])*spacing**3
+    
+
+def AngularMomentumDist(psi,funct,resol,Uarray,Kx,Ky,Kz,ifft_funct, distarray):
+    
+    A = np.abs(psi)
+    CPsi = np.conj(psi)
+    spacing = Uarray[1]-Uarray[0]
+    DelTx, DelTy, DelTz = np.gradient(A, spacing)
+    
+    DelTx = MomentumFFT(DelTx,A,CPsi,funct,resol,Kx,ifft_funct)
+    DelTy = MomentumFFT(DelTy,A,CPsi,funct,resol,Ky,ifft_funct)
+    DelTz = MomentumFFT(DelTz,A,CPsi,funct,resol,Kz,ifft_funct)
+    
+    Out = np.zeros(3)
+
+    for ind in np.ndindex(DelTx.shape): 
+                
+        VectorA = np.array([DelTx[ind],DelTy[ind],DelTz[ind]])
+        
+        VectorB = np.array([Uarray[ind[0]],Uarray[ind[1]],Uarray[ind[2]]])
+        
+        Vec = np.cross(VectorA,VectorB)
+        
+        Out += Vec
+
+    return Out * spacing**3
+
+        
 ######################### Soliton Init Factory Setting!
 
 def LoadDefaultSoliton(Silent = True):
@@ -1656,7 +1706,8 @@ initsoliton_jit = numba.jit(initsoliton)
 IP_jit = numba.jit(isolatedPotential)
 
 PC_jit = numba.jit(planeConvolve)
-    
+ 
+L_jit = numba.jit(AngularMomentumDist)   
     
 ######################### New Version With Built-in I/O Management
 ######################### Central Function
@@ -1692,7 +1743,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     
     loc = './' + save_path + '/' + run_folder
         
-    if DumpInit and (InitPath == ''):
+    if UseInit and (InitPath == ''):
         raise RuntimeError("Must supply initial wavefunction!")
         
     try:
@@ -1882,7 +1933,9 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     
     Kx,Ky,Kz = np.meshgrid(WN,WN,WN,sparse=True, indexing='ij',)
     
-##########################################################################################
+       
+    
+    ##########################################################################################
     # SET UP K-SPACE COORDINATES FOR COMPLEX DFT
 
     kvec = 2 * np.pi * np.fft.fftfreq(resol, lengthC / float(resol))
@@ -2031,6 +2084,8 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
 
     fft_psi = pyfftw.builders.fftn(psi, axes=(0, 1, 2), threads=num_threads)
     
+    funct = fft_psi(psi)
+    
     ifft_funct = pyfftw.builders.ifftn(funct, axes=(0, 1, 2), threads=num_threads)       
     
     # Experimental Zero Ridder!
@@ -2068,6 +2123,29 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         its_per_save = 1
         
     h = t / float(actual_num_steps)
+    
+    its_per_momentum = its_per_save
+    
+    ##########################################################################################
+    # First ULDM Momentum and Angular Momentum Saves 
+    
+    if save_options[18] or save_options[19]:
+        distarray = ne.evaluate("((xarray)**2+(yarray)**2+(zarray)**2)**0.5") # Radial coordinates for system
+        spacing = lengthC/resol
+        
+        momentum_I = 0
+    
+        if save_options[18]:
+            printU('Saving ULDM momentum.','Momentum')
+            Momentum = MomentumEval(psi,funct,resol,spacing,Kx,Ky,Kz,ifft_funct)
+            np.save(os.path.join(os.path.expanduser(loc), f"Outputs/p_{momentum_I:02d}.npy"), Momentum)
+
+        if save_options[19]:
+            printU('Saving ULDM angular momentum with respect to origin.','Momentum')
+            Angular = L_jit(psi,funct,resol,gridvec,Kx,Ky,Kz,ifft_funct, distarray)
+            np.save(os.path.join(os.path.expanduser(loc), f"Outputs/L_{momentum_I:02d}.npy"), Angular)
+        
+    
     ##########################################################################################
     # SETUP PADDED POTENTIAL HERE (From JLZ)
 
@@ -2344,6 +2422,23 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         
         funct = fft_psi(psi)
         funct = ne.evaluate("funct*exp(-1j*0.5*h*karray2)")
+        
+        
+        ###### New Momentum
+        if ix % its_per_momentum == 0:
+            if save_options[18] or save_options[19]:
+                prog_bar(actual_num_steps, ix + 1, tint,'pL',PBEDisp)
+
+                momentum_I += 1
+
+                if save_options[18]:
+                    Momentum = MomentumEval(psi,funct,resol,spacing,Kx,Ky,Kz,ifft_funct)
+                    np.save(os.path.join(os.path.expanduser(loc), f"Outputs/p_{momentum_I:02d}.npy"), Momentum)
+
+                if save_options[19]:
+                    Angular = L_jit(psi,funct,resol,gridvec,Kx,Ky,Kz,ifft_funct, distarray)
+                    np.save(os.path.join(os.path.expanduser(loc), f"Outputs/L_{momentum_I:02d}.npy"), Angular)
+        
         
         psi = ifft_funct(funct)
 
@@ -2711,9 +2806,7 @@ def Load_Data(save_path,ts,save_options,save_number):
 
 def Load_npys(loc,save_options, LowMem = False):
     
-
-    
-    if save_options[0] or save_options[1] or save_options[6] or save_options[12]: 
+    if save_options[0] or save_options[1] or save_options[6] or save_options[12] or save_options[15]: 
         printU('3D saves are not automatically loaded. Please load them manually.','IO')
         save_options[0] = False
         save_options[1] = False
@@ -2734,7 +2827,6 @@ def Load_npys(loc,save_options, LowMem = False):
     Out['Directory'] = loc
     
     
-    
     for Word in SaveWordList:
         if (Word != 'Energy') and (Word != 'Entropy'): 
             Out[Word] = []
@@ -2752,7 +2844,7 @@ def Load_npys(loc,save_options, LowMem = False):
         
         try:
             for Word in SaveWordList:
-                if (Word != 'Energy') and (Word != 'Entropy'): 
+                if (Word != 'Energy') and (Word != 'Entropy') and (Word != 'Momentum') and (Word != 'AngMomentum'): 
                     Out[Word].append(IOLoad_npy(loc,Word,x))        
             x += 1
         

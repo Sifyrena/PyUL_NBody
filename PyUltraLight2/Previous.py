@@ -1,6 +1,6 @@
 Version   = str('PyUL2') # Handle used in console.
-D_version = str('Build 2021 May 13') # Detailed Version
-S_version = 21.3 # Short Version
+D_version = str('Build 2021 Jun 01') # Detailed Version
+S_version = 22.45 # Short Version
 
 # Housekeeping
 import time
@@ -26,8 +26,18 @@ pi = np.pi
 eV = 1.783e-36 # kg*c^2
 
 # ULDM:
-axion_E = 1e-22
 
+#m22L = float(input())
+#axion_E = float(input('Axion Mass (eV).') or 1e-22)
+
+axion_E = 1e-21
+
+SSLength = 5
+
+def printU(Message,SubSys = 'Sys'):
+    print(f"{Version}.{SubSys.rjust(SSLength)}: {Message}")
+    
+printU(f"Axion Mass: {axion_E:.2g} eV.", 'Universe')
 # CDM Clumps:
 #axion_E = 2e-5
 
@@ -90,6 +100,32 @@ def IOSave(loc,Type,save_num,save_format = 'npy',data = []):
 def IOLoad_npy(loc,Type,save_num):
     return np.load(f"{loc}/Outputs/{IOName(Type)}_#{save_num:03d}.npy")
 
+def CreateStream(loc, NS = 32, Target = 'Undefined', StreamChar = [0]):
+    file = open(f'{loc}/NBStream.uldm', "w+")
+    file.write(f'{Version}: NBody State Stream File.\nRK4 N body Steps Per ULDM Step: {NS//4:.0f}\nTarget v: {Target}\nVectorised TMState loci printed: {StreamChar}')
+    file.close()
+    
+def NBStream(loc,Message):
+    file = open(f'{loc}/NBStream.uldm', "a")
+    file.write("\n")
+    
+    if type(Message) == np.ndarray:
+        MesList = Message.tolist()
+        
+        for Mes in MesList:
+            file.write(f'{Mes:.16f}, ')
+    else:
+        file.write(f'{Message}')
+    file.close()
+    
+def NBDensity(loc,Density):
+    file = open(f'{loc}/LocalDensities.uldm', "a+")
+    file.write(f'{Density:.8f}')  
+    file.close()
+    
+def ReadLocalDensity(loc):
+    with open(f'{loc}/LocalDensities.uldm', "r") as file:
+        return float(file.read())
 
 ### AUX. FUNCTION TO GENERATE TIME STAMP
 
@@ -100,13 +136,9 @@ def GenFromTime():
     
     return timestamp
 
-SSLength = 5
-
-def printU(Message,SubSys = 'Sys'):
-    print(f"{Version}.{SubSys.rjust(SSLength)}: {Message}")
 ####################### AUX. FUNCTION TO GENERATE PROGRESS BAR
 def prog_bar(iteration_number = 100, progress = 1, tinterval = 0 ,status = '',adtl = ''):
-    size = 12
+    size = 10
     ETAStamp = time.time() + (iteration_number - progress)*tinterval
     
     ETA = datetime.fromtimestamp(ETAStamp).strftime("%d/%m/%Y, %H:%M:%S")
@@ -285,7 +317,7 @@ def isolatedPotential(rho, green, l, fft_X, ifft_X, fft_plane, ifft_plane):
     # the for loop
     for i in range(0,2*n):
         plane = rhopad[i, :, :]
-        rhopad[i, :, :] = PC_jit(green[ndx[i], :, :], plane, n, fft_plane, ifft_plane) #make sure this indexing works 
+        rhopad[i, :, :] = PC_jit(green[ndx[i], :, :], plane, n, fft_plane, ifft_plane)
     # - - - - - - - - - - - - - - - - - - - - - -    
     #rhopad = (1/n**2) * scipy.fftpack.ifftn(rhopad, axes = (0,)) #inverse transform x-axis
     rhopad = (1/n**2) * ifft_X(rhopad) # normalization
@@ -370,6 +402,15 @@ def convert(value, unit, type):
             converted = value * solar_mass / mass_unit * length_unit**3 / parsec**3  / 1000  
         elif (unit == 'kg/m3'):
             converted = value / mass_unit * length_unit**3
+        else:
+            raise NameError('Unsupported DENSITY unit used')
+            
+            
+    elif (type == 'a'):
+        if (unit == ''):
+            converted = value
+        elif (unit == 'm/s2'):
+            converted = value / length_unit * time_unit**2   
         else:
             raise NameError('Unsupported DENSITY unit used')
 
@@ -459,6 +500,14 @@ def convert_back(value, unit, type):
         else:
             raise NameError('Unsupported DENSITY unit used')
 
+    elif (type == 'a'):
+        if (unit == ''):
+            converted = value
+        elif (unit == 'm/s2'):
+            converted = value * length_unit / time_unit**2   
+        else:
+            raise NameError('Unsupported DENSITY unit used')        
+            
     else:
         raise TypeError('Unsupported conversion type')
 
@@ -506,6 +555,24 @@ def initsoliton(funct, xarray, yarray, zarray, position, alpha, f, delta_x,Cutof
 
     return funct
 
+
+############################FUNCTION TO PUT SPHERICAL SOLITON DENSITY PROFILE INTO 3D BOX (Uses pre-computed array)
+
+def initsolitonRadial(line, alpha, f, delta_x,Cutoff = 5.6):
+    funct = 0*line
+    
+    for index in np.ndindex(funct.shape):
+        
+        
+        # Note also that this distfromcentre is here to calculate the distance of every gridpoint from the centre of the soliton, not to calculate the distance of the soliton from the centre of the grid
+        distfromcentre = (
+            (line[index[0]]) ** 2) ** 0.5
+        # Utilises soliton profile array out to dimensionless radius 5.6.
+        if (np.sqrt(alpha) * distfromcentre <= Cutoff):
+         
+            funct[index] = alpha * f[int(np.sqrt(alpha) * (distfromcentre / delta_x + 1))]
+
+    return funct
 
 """
 Save various properties of the various grids in various formats
@@ -590,10 +657,11 @@ def calculate_energies(rho, Vcell, phiSP,phiTM, psi, karray2, fft_psi, ifft_func
 
     rho = rho.real
     
-    if Uniform:
-        BoxAvg = np.mean(rho) # TEMPORARILY DISABLED!
-    else:
-        BoxAvg = 0
+    #if Uniform:
+    #    BoxAvg = np.mean(rho) # SHOULD BE TEMPORARILY DISABLED!
+    #else:
+    
+    BoxAvg = 0
 
     # Gravitational potential energy density associated with the point masses potential
 
@@ -624,11 +692,6 @@ def calculate_energies(rho, Vcell, phiSP,phiTM, psi, karray2, fft_psi, ifft_func
     # Total mass compared to background.
     Mtot = np.sum(rho)*Vcell
     mtotlist.append(Mtot)
-
-# CALCULATE_ENERGIES_F, NEW VERSION IN 2.20
-
-# Evaluating ∫ ∫ ∫ H d^3x using one higher order!
-
 
 ### Toroid or something
         
@@ -947,7 +1010,7 @@ def FWNBody_NI(t,TMState,masslist,phiSP,a,lengthC,resol):
 FWNBody3 = FWNBody
 FWNBody3_NI = FWNBody_NI
 
-def NBodyAdvance(TMState,h,masslist,phiSP,a,lengthC,resol,NS):
+def NBodyAdvance(TMState,h,masslist,phiSP,a,lengthC,resol,NS,loc = '',Stream = False, StreamChar = ''):
         #
         if NS == 0: # NBody Dynamics Off
             
@@ -974,6 +1037,9 @@ def NBodyAdvance(TMState,h,masslist,phiSP,a,lengthC,resol,NS):
                 TMK3, Trash = FWNBody3(0,TMState + H/2*TMK2,masslist,phiSP,a,lengthC,resol)
                 TMK4, GradientLog = FWNBody3(0,TMState + H*TMK3,masslist,phiSP,a,lengthC,resol)
                 TMState = TMState + H/6*(TMK1+2*TMK2+2*TMK3+TMK4)
+                
+                if Stream:
+                    NBStream(loc,TMState[StreamChar])
                 
             TMStateOut = TMState
 
@@ -1016,11 +1082,12 @@ def NBodyAdvance_NI(TMState,h,masslist,phiSP,a,lengthC,resol,NS):
 
 ######################### Soliton Init Factory Setting!
 
-def LoadDefaultSoliton():
+def LoadDefaultSoliton(Silent = True):
     
     f = np.load('./Soliton Profile Files/initial_f.npy')
     
-    printU(f"\n{Version} Loaded original PyUL soliton profiles.",'Load Soliton')
+    if not Silent:
+        printU(f"\n{Version} Loaded original PyUL soliton profiles.",'Load Soliton')
     
     return f
 
@@ -1611,9 +1678,10 @@ def ULRead(InitPath):
     
     return psi
 
-def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal = False, UseInit = False, IsoP = False, UseDispSponge = False, SelfGravity = True, NBodyInterp = True, NBodyGravity = True, Shift = False, Simpson = False, Silent = False, AutoStop = False, AutoStop2 = False, WellThreshold = 100, InitPath = '', InitWeight = 1, Message = ''):
+def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal = False, UseInit = False, IsoP = False, UseDispSponge = False, SelfGravity = True, NBodyInterp = True, NBodyGravity = True, Shift = False, Simpson = False, Silent = False, AutoStop = False, AutoStop2 = False,AutoStop3 = False, KEThreshold = 0.9, WellThreshold = 100, InitPath = '', InitWeight = 1, Message = '', Stream = False, StreamChar = [0]):
     
     if run_folder == "":
+        printU('Nothing done!','IO')
         return
     
     clear_output()
@@ -1688,7 +1756,9 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     })
     
     PyULConfig["Stopping Conditions"] = ({
-    "When N body #0 Stops": AutoStop,
+    "When body #0 Stops": AutoStop,
+    "When body #0 Loses Significant Energy": AutoStop3,
+    "Energy Loss Factor": KEThreshold,
     "When Field Exceeds Limit": AutoStop2,
     "Depth Factor" : WellThreshold,
     })
@@ -1712,7 +1782,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     # External Credits Print
     PyULCredits(IsoP,UseDispSponge,embeds)
     # Embedded particles are Pre-compiled into the list.
-    
+        
     if not Uniform:
         Density = 0
         UVel = [0,0,0]
@@ -1844,7 +1914,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         DensityCom = MassCom / resol**3
 
         print('========================Dispersive Background====================================')
-        printU(f"Solitons overridden with a pre-generated wavefunction with pseudorandom phase.",'Init')
+        printU(f"Added a pre-generated wavefunction with pseudorandom phase.",'Init')
         
     # INITIALISE SOLITONS WITH SPECIFIED MASS, POSITION, VELOCITY, PHASE
 
@@ -1853,6 +1923,12 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     MassCom = Density*lengthC**3
 
     UVelocity = convert(np.array(UVel),s_velocity_unit, 'v')
+    
+    VTot = np.linalg.norm(UVelocity)
+    
+    if Stream:
+        CreateStream(loc, NS, VTot,StreamChar)
+        printU("Created stream file at root folder for variables {StreamChar}.",'NBody')
 
     if AutoStop and NumTM == 1:
         ThresholdVelocity = -1*UVelocity[1]
@@ -1863,7 +1939,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     
     if Uniform:
         print('========================Uniform Background====================================')
-        printU(f"Solitons overridden with a uniform wavefunction with no phase.",'Init')
+        printU(f"Added a uniform wavefunction with no phase.",'Init')
         printU(f"Background ULDM mass in domain is {MassCom:.4f}, at {Density:.4f} per grid.",'Init')
         printU(f"Background Global velocity is (x,y,z): {UVel[1]},{UVel[0]},{UVel[2]}.",'Init')
         print('==============================================================================')
@@ -2077,15 +2153,18 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     for MI, particle in enumerate(particles):
                
         mT = convert(particle[0], m_mass_unit, 'm')
+        masslist.append(mT)
+
+        position = convert(np.array(particle[1]), m_position_unit, 'l')
         
         if mT == 0:
             printU(f"Particle #{MI} loaded as observer.",'NBody')
         else:
-            printU(f"Particle #{MI} loaded, with (code) mass {mT:.3f}",'NBody')
-        
-        masslist.append(mT)
+            
+            DensityInit = QuickInterpolate(rho,lengthC,resol,position)
+            printU(f"Particle #{MI} mass {mT:.5f} and local density {DensityInit:.5f} (code units).",'NBody')
+            NBDensity(loc,DensityInit)
 
-        position = convert(np.array(particle[1]), m_position_unit, 'l')
         
         if Shift:
             position = GridShift(position, lengthC, resol)
@@ -2204,7 +2283,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     
 
     ########################################################################################## 
-    # Chapel Code From Yale Cosmology.
+    # From Yale Cosmology.
   
     if UseDispSponge:
         
@@ -2252,6 +2331,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     PBEDisp = ''
     #####################################################################################LOOP
     for ix in range(actual_num_steps):
+                
         TIntegrate += h
         prog_bar(actual_num_steps, ix + 1, tint,'FT',PBEDisp)
         if HaSt == 1:
@@ -2294,7 +2374,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         
         if NBodyInterp:
 
-            TMState, GradientLog = NBodyAdvance(TMState,h,masslist,phiSP,a,lengthC,resol,NS)
+            TMState, GradientLog = NBodyAdvance(TMState,h,masslist,phiSP,a,lengthC,resol,NS, loc, Stream, StreamChar)
             
         else:
 
@@ -2328,7 +2408,6 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         if AutoStop and len(particles) == 1:
             velocity = TMState[3:6]
             Vdisp = np.linalg.norm(velocity)
-            VTot = np.linalg.norm(UVelocity)
             PBEDisp = f'[V={Vdisp:.2f} / Tg.V={VTot:.2f}]'
             
         if SelfGravity:
@@ -2769,7 +2848,6 @@ def MeshSpacing(resol,length,length_units, silent = False):
     
 def GenPlummer(rP,length_units, silent = True, resol = 0,length = 0):
     a = convert_back(1/rP,length_units,'l')
-    
     if not silent:
         clength = convert(length,length_units,'l')
 
@@ -2859,6 +2937,7 @@ def GenerateConfig(NS, length, length_units, resol, duration, duration_units, st
         
         if InputName == "ABORT":
             return ""
+        
         elif InputName != "":
             timestamp = InputName
         else:
@@ -3127,9 +3206,12 @@ def NBodyEnergy(MassListSI,TMDataSI,EndNum,a=0,length_units = ''): # kg, m, m/s,
         printU('Using Standard Newtonian Potential.', 'NBoE')
     
     else:
-        ADim = convert(a,length_units,'l')
+        
+        rP =  RecPlummer(a,length_units)
+
+        ADim = 1/rP
     
-        printU(f'The dimensionful a is {ADim:.4f}({length_units})^(-1)', 'NBoE')
+        printU(f'The Plummer Radius is {rP:.4f}({length_units})', 'NBoE')
     
     NBo = len(MassListSI)
     
@@ -3184,7 +3266,7 @@ def FOSR(m,r):
 def FOSU(m,r):
     return np.sqrt(m/r)
 
-def PopulateWithStars(embeds,particles,rIn = 0.4,rOut = 1.2,InBias = 0, NStars = 10, MassMax = 1e-5):
+def PopulateWithStars(NStars, MaxMass, embeds, particles, resol, length, length_units, s_mass_unit, m_position_unit, m_velocity_unit, rIn = 0.4, rOut = 1.2):
 
     for Halo in embeds:
               
@@ -3192,15 +3274,22 @@ def PopulateWithStars(embeds,particles,rIn = 0.4,rOut = 1.2,InBias = 0, NStars =
         GVel = np.array(Halo[2])
         GMass = Halo[0]
         GRatio = Halo[3]
-        Scale = GRatio*0.5 + 0.5
+        
+        SolMass = GMass * (1-GRatio)
+        
+        SolSizeC = SolEst(SolMass,length,resol,mass_unit = s_mass_unit,length_units = length_units)
+        
+        SolSizeL = convert_between(SolSizeC,'',length_units,'l')
         
         for i in range(NStars):
 
-            r = (np.random.random()*(rOut-rIn) + rIn)
+            r = (np.random.random()*(rOut-rIn) + rIn) * SolSizeL
+            
+            Mass = MaxMass*np.random.random()
 
             theta = 2*np.pi*np.random.random()
             
-            v = FOSR(GMass,r) * Scale
+            m_temp, v = DefaultSolitonOrbit(resol,length, length_units, SolMass, s_mass_unit, r, m_position_unit, m_velocity_unit)
 
             Position = np.array([r*np.cos(theta),r*np.sin(theta),0]) + GPos
             
@@ -3208,7 +3297,7 @@ def PopulateWithStars(embeds,particles,rIn = 0.4,rOut = 1.2,InBias = 0, NStars =
             
             Velocity = np.array([v*np.sin(theta),-v*np.cos(theta),0])  + GVel
 
-            Mass = MassMax*np.random.random()
+            
 
             particles.append([Mass,Position.tolist(),Velocity.tolist()])
 
@@ -3248,7 +3337,8 @@ def PopulateBHWithStars(particles,rIn = 0.4, rOut = 1.2,InBias = 0, NStars = 10,
     return particles
 
 
-def SolEst(mass,length,resol,mass_unit = '',length_units = '', Plot = False, Density = 0, density_unit = ''): # Only deals with default solitons!
+def SolEst(mass,length,resol,mass_unit = '',length_units = '', Plot = False, Density = 0, density_unit = ''): 
+    # Only deals with default solitons!
     import matplotlib.pyplot as plt
     
     code_mass = convert(mass,mass_unit,'m')
@@ -3293,7 +3383,8 @@ def SolEst(mass,length,resol,mass_unit = '',length_units = '', Plot = False, Den
         return codeHWHM
     
     except IndexError:
-        print('Soliton too wide!')
+        print('Soliton too wide or too narrow!')
+        print(f'Central value: {funct[0]}',f'Minimum value: {np.min(funct)}')
         return 0
 
 SolitonSizeEstimate = SolEst   
@@ -3306,14 +3397,6 @@ def DefaultDBL(v = 10,vUnit = 'm/s'):
 
 
 # Relevant for Paper 1
-def SliceFinderC(TMState,resol,length,verbose = False):
-
-    TMState = TMState[0:3]
-    RNum = (np.array(TMState)*1/length+1/2)*resol
-    RPt = np.floor(RNum)
-    if verbose:
-        print(f'The test mass particle #0 is closest to {RPt[0]}x,{RPt[1]}y,{RPt[2]}z in the data.')
-    return RPt
 
 def ParameterScanGenerator(path_to_config,ScanParams,ValuePool,save_path,
                            SaveSpace = False, KeepResol = True, KeepSmooth = False,
@@ -3503,23 +3586,24 @@ DensityEstimator = RhoEst
 
 def VizInit2D(length,length_units,resol,embeds,
               solitons,s_position_unit, s_mass_unit,
-              particles,m_position_unit, Uniform, Density, UVel):
+              particles,m_position_unit, Uniform, Density, UVel, rP, VScale = 1):
     
-    print(length_units)
     particles, solitons, embeds = EmbedParticle(particles,embeds,solitons)
+    
+    
     import matplotlib.pyplot as plt
+    
     PR = np.linspace(-length/2,length/2,resol,endpoint = False)
     
     fig = plt.figure(figsize=(12, 12))
     ax = fig.add_subplot(111)
     
     for i,soliton in enumerate(solitons):
-        #print(f"Visualizing Soliton #{i}")
+
         mass = soliton[0]
         
         HWHM = SolEst(mass,length,resol,s_mass_unit,length_units)
-        #print(f"FW WAS HERE {HWHM}")
-        
+
         HWHM = convert_back(HWHM,length_units,'l')
         
         position = convert_between(np.array(soliton[1]),s_position_unit,length_units,'l')
@@ -3527,12 +3611,25 @@ def VizInit2D(length,length_units,resol,embeds,
         circ = plt.Circle((position[1],position[0]),HWHM,fill = False)
         
         ax.add_patch(circ)
+        
+        velocity = np.array(soliton[2])
+        
+        if np.linalg.norm(velocity) != 0:
+            ax.quiver(position[1],position[0],velocity[1],velocity[0],scale = VScale)
     
     for i,particle in enumerate(particles):
-        #print(f"Visualizing TM #{i}")
+
+        
         position = convert_between(np.array(particle[1]),m_position_unit,length_units,'l')
         
+        velocity = np.array(particle[2])
+        
+        circ = plt.Circle((position[1],position[0]),rP,fill = False)
+        ax.add_patch(circ)
+        
         ax.scatter(position[1],position[0])
+        if np.linalg.norm(velocity) != 0:
+            ax.quiver(position[1],position[0],velocity[1],velocity[0], scale = VScale)
         
     for i,embed in enumerate(embeds):
         #print(f"Visualizing Embedded Soliton #{i} (Approximate)")
@@ -3551,14 +3648,20 @@ def VizInit2D(length,length_units,resol,embeds,
     ax.set_ylim(PR[0],PR[-1])
     ax.set_xlim(PR[0],PR[-1])
     
-    ax.set_xlabel(f'x / {length_units}')
-    ax.set_ylabel(f'y / {length_units}')
-    ax.grid()
+    ax.set_xlabel(f'$x$')
+    ax.set_ylabel(f'$y$')
+    ax.grid(color = 'k',alpha = 0.3)
     
     if Uniform:
         if UVel[1]**2 + UVel[0]**2 != 0:
             ax.quiver(0.75,0.75,UVel[1],UVel[0])
         ax.text(0.75,0.75,f'Density: {Density}')
+    
+    ax.set_xticks(PR)
+    ax.set_yticks(PR)
+    
+    ax.set_xticklabels([])
+    ax.set_yticklabels([])
     
     return fig, ax
 
@@ -3656,9 +3759,101 @@ def GridShift(position, lengthC, resol, direction = '-'):
 def GetRel(array):
     return array - array[0]
 
-class Universe():
-    H = 1
+
+def DefaultSolitonOrbit(resol,length, length_units, s_mass, s_mass_unit, m_radius, m_position_unit, m_velocity_unit = '', Silent = True, Detail = 10000):
     
-class Simulation():
-    Data = {}
-            
+    lengthC = convert(length,length_units,'l')
+    s_massC = convert(s_mass,s_mass_unit,'m')
+    m_radiC = convert(m_radius,m_position_unit,'l')
+    
+    
+    if m_radiC >= lengthC/2:
+        raise ValueError("Supplied orbital radius too large!")
+    
+    linearray = np.linspace(0,lengthC/2,Detail,endpoint = False)
+    
+    lineh = linearray[1] - linearray[0]
+
+    f = LoadDefaultSoliton()
+
+    delta_x = 0.00001
+
+    alpha = (s_massC / 3.883) ** 2
+
+    funct = np.abs(initsolitonRadial(linearray, alpha, f, delta_x,Cutoff = 5.6))**2
+    
+    if not Silent:
+        import matplotlib.pyplot as plt
+
+        plt.plot(linearray,funct)
+        plt.xlabel('Code Length')
+        plt.ylabel('Code Density')
+        
+        plt.vlines(m_radiC,np.min(funct),np.max(funct))
+    
+    try:
+        CutOff = np.where(linearray >= m_radiC)[0][0]
+    except:
+        CutOff = len(linearray)
+    
+    Integrand = linearray[0:CutOff]**2 * funct[0:CutOff]
+    from scipy import integrate as SINT
+    MInt = 4*np.pi*SINT.simps(Integrand, x = linearray[0:CutOff])
+    
+    VC = np.sqrt(MInt/m_radiC)
+    
+    return convert_back(MInt, s_mass_unit,'m'), convert_back(VC,m_velocity_unit,'v')
+
+
+# Numerical Values Cited From Hui L. et al
+    
+rho0 = 0.00440
+phi0 = 0.3155
+f0 = 3.9251
+epi0 = 0.16277
+w0 = 0.10851
+    
+class Soliton_Ground:
+   
+    def __init__(self, statevec = [], M_unit = '', M = 1, position = [0,0,0], velocity = [0,0,0], phase = 0):      
+        
+        if statevec != []:
+            if len(statevec) == 4:
+                M = statevec[0]
+                position = statevec[1]
+                velocity = statevec[2]
+                phase = statevec[3]
+            else:
+                raise RuntimeError("State vector supplied is broken.")
+        
+        
+        self.M = convert_between(M,M_unit,'kg','m')
+        self.pos = position
+        self.vel = velocity
+        self.phase = phase
+        self.ma = axion_mass
+    
+    def CoreDensity(self, unit = ''):
+        M = self.M
+        ma = self.ma
+        value = (G*ma**2/hbar**2)**3 * M**4 * rho0
+        return convert_between(value,'kg/m3',unit,'d')
+
+    def CoreField(self, unit = ''):
+        M = self.M
+        ma = self.ma
+        value = -1*(G*M*ma/hbar)**2 * phi0
+        return convert_between(value,'m/s2',unit,'a')
+
+    def rHWHM(self, unit = ''):
+        M = self.M
+        ma = self.ma
+        value = hbar**2/(G*M*ma**2)*f0
+        return convert_between(value,'m',unit,'l')
+
+    def VirialV(self, unit = ''):
+        M = self.M
+        ma = self.ma
+        value = G*M*ma/hbar * w0 **(1/2)
+        return convert_between(value,'m/s',unit,'v')
+    
