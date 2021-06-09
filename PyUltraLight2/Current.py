@@ -1,6 +1,6 @@
 Version   = str('PyUL2') # Handle used in console.
 D_version = str('Build 2021 Jun 08') # Detailed Version
-S_version = 23.1 # Short Version
+S_version = 23.11 # Short Version
 
 # Housekeeping
 import time
@@ -1080,34 +1080,35 @@ def NBodyAdvance_NI(TMState,h,masslist,phiSP,a,lengthC,resol,NS):
 
 ######################### June Addition (Momentum)
 
-def LpEval(psi,funct,resol,Uarray,Kx,Ky,Kz,ifft_funct, distarray):
+
+def LpEval(psi,funct,resol,Uarray,Kx,Ky,Kz,ifft_funct):
     
-    PSIMagn = np.abs(psi)
-    CPsi = np.conj(psi)
+    funct *= 1j
     
+    A = np.absolute(psi)
+
     spacing = Uarray[1]-Uarray[0]
     
-    DelTx, DelTy, DelTz = np.gradient(PSIMagn, spacing)
+    DAx, DAy, DAz = np.gradient(A, spacing)
 
-    DelTx = ne.evaluate('1j*PSIMagn*DelTx')
-    DelTy = ne.evaluate('1j*PSIMagn*DelTy')
-    DelTz = ne.evaluate('1j*PSIMagn*DelTz')
-
-    Gridx = ne.evaluate("1j*Kx*funct") 
-    Gridy = ne.evaluate("1j*Ky*funct")
-    Gridz = ne.evaluate("1j*Kz*funct")
-
-    DPsx = ifft_funct(Gridx)
-    DPsy = ifft_funct(Gridy)
-    DPsz = ifft_funct(Gridz)
-
-    DelTx = ne.evaluate('real(DelTx - 1j*CPsi*DPsx)')
-    DelTy = ne.evaluate('real(DelTy - 1j*CPsi*DPsy)')
-    DelTz = ne.evaluate('real(DelTz - 1j*CPsi*DPsz)')
-
-    pOut = np.array([np.sum(DelTx),np.sum(DelTy),np.sum(DelTz)])*spacing**3
+    DAx = ne.evaluate('A*DAx')
+    KGx = ne.evaluate('Kx*funct')
+    DPx = ifft_funct(KGx)
+    DAx = ne.evaluate('imag(DAx - conj(psi)*DPx)')
     
-    LOut = L_jit(Uarray,DelTx,DelTy,DelTz)
+    DAy = ne.evaluate('A*DAy')
+    KGy = ne.evaluate('Ky*funct')
+    DPy = ifft_funct(KGy)
+    DAy = ne.evaluate('imag(DAy - conj(psi)*DPy)')    
+
+    DAz = ne.evaluate('A*DAz')
+    KGz = ne.evaluate('Kz*funct')
+    DPz = ifft_funct(KGz)
+    DAz = ne.evaluate('imag(DAz - conj(psi)*DPz)')
+    
+    pOut = -1 * np.array([np.sum(DAx),np.sum(DAy),np.sum(DAz)])*spacing**3
+    
+    LOut = L_jit(Uarray,DAx,DAy,DAz)
 
     LOut *= spacing**3
 
@@ -1115,17 +1116,17 @@ def LpEval(psi,funct,resol,Uarray,Kx,Ky,Kz,ifft_funct, distarray):
 
 def LUQuick(Uarray,DelTx,DelTy,DelTz):
     
-    LOut = np.zeros(3)
+    L = np.zeros(3)
 
     for ind in np.ndindex(DelTx.shape): 
-        VectorR = np.array([Uarray[ind[0]],Uarray[ind[1]],Uarray[ind[2]]])
-        VectorP = np.array([DelTx[ind],DelTy[ind],DelTz[ind]])
+        R = np.array([Uarray[ind[0]],Uarray[ind[1]],Uarray[ind[2]]])
+        P = np.array([DelTx[ind],DelTy[ind],DelTz[ind]])
 
-        Vec = np.cross(VectorR,VectorP)
+        Vec = np.cross(R,P)
 
-        LOut += Vec
+        L += Vec
     
-    return LOut
+    return L
     
 L_jit = numba.jit(LUQuick)
 
@@ -2129,12 +2130,10 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     # First ULDM Momentum and Angular Momentum Saves 
     
     if save_options[18] or save_options[19]:
-        distarray = ne.evaluate("((xarray)**2+(yarray)**2+(zarray)**2)**0.5") # Radial coordinates for system
-        spacing = lengthC/resol
         
         momentum_I = 0
     
-        pOut,LOut = Lp_jit(psi,funct,resol,gridvec,Kx,Ky,Kz,ifft_funct, distarray)
+        pOut,LOut = Lp_jit(psi,funct,resol,gridvec,Kx,Ky,Kz,ifft_funct)
         
         if save_options[18]:
             printU('Saving ULDM momentum.','Momentum')
@@ -2421,17 +2420,15 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         
         
         funct = fft_psi(psi)
-        funct = ne.evaluate("funct*exp(-1j*0.5*h*karray2)")
-        
-        
-        ###### New Momentum
+
+        ###### New Momentum Evaluator
         if ix % its_per_momentum == 0:
             if save_options[18] or save_options[19]:
                 prog_bar(actual_num_steps, ix + 1, tint,'pL',PBEDisp)
 
                 momentum_I += 1
                 
-                pOut,LOut = Lp_jit(psi,funct,resol,gridvec,Kx,Ky,Kz,ifft_funct, distarray)
+                pOut,LOut = Lp_jit(psi,funct,resol,gridvec,Kx,Ky,Kz,ifft_funct)
         
                 if save_options[18]:
                     IOSave(loc,'Momentum',momentum_I,save_format = 'npy',data = pOut)
@@ -2439,6 +2436,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
                 if save_options[19]:
                     IOSave(loc,'AngMomentum',momentum_I,save_format = 'npy',data = LOut)
 
+        funct = ne.evaluate("funct*exp(-1j*0.5*h*karray2)")
         psi = ifft_funct(funct)
 
 
