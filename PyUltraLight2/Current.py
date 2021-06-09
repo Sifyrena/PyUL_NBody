@@ -2422,7 +2422,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         funct = fft_psi(psi)
 
         ###### New Momentum Evaluator
-        if ix % its_per_momentum == 0:
+        if (ix+1) % its_per_momentum == 0:
             if save_options[18] or save_options[19]:
                 prog_bar(actual_num_steps, ix + 1, tint,'pL',PBEDisp)
 
