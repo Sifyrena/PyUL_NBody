@@ -1,6 +1,6 @@
 Version   = str('PyUL2') # Handle used in console.
 D_version = str('Build 2021 Jun 08') # Detailed Version
-S_version = 23 # Short Version
+S_version = 23.1 # Short Version
 
 # Housekeeping
 import time
@@ -73,7 +73,7 @@ energy_unit = mass_unit * length_unit ** 2 / (time_unit**2)
 ### Internal Flags used for IO
 SFS = '3Density 3Wfn 2Density Energy 1Density NBody 3Grav 2Grav DF 2Phase Entropy 1Grav 3GravF 2GravF 1GravF 3UMmt 2UMmt 1UMmt Momentum AngMomentum'
 
-SNM = 'R3D P3D R2D EGY R1D NTM G3D G2D DYF A2D ENT G1D F3D F2D F1D V3D V2D V1D MTT MVR'
+SNM = 'R3D P3D R2D EGY R1D NTM G3D G2D DYF A2D ENT G1D F3D F2D F1D V3D V2D V1D PMT MVR'
 
 SaveFlags = SFS.split()
 SaveNames = SNM.split()
@@ -1080,56 +1080,55 @@ def NBodyAdvance_NI(TMState,h,masslist,phiSP,a,lengthC,resol,NS):
 
 ######################### June Addition (Momentum)
 
-def MomentumFFT(DelT,A,CPsi,funct,resol,K,ifft_funct):
+def LpEval(psi,funct,resol,Uarray,Kx,Ky,Kz,ifft_funct, distarray):
     
-    DelT = ne.evaluate('1j*A*DelT')
-    Grid = ne.evaluate("1j*K*funct")   
-    DPs = ifft_funct(Grid)
-
-    return ne.evaluate('real(DelT - 1j*CPsi*DPs)')
-
-def MomentumEval(psi,funct,resol,spacing,Kx,Ky,Kz,ifft_funct):
-    
-    A = np.abs(psi)
-    
+    PSIMagn = np.abs(psi)
     CPsi = np.conj(psi)
     
-    DelTx, DelTy, DelTz = np.gradient(A, spacing)
-    
-    DelTx = MomentumFFT(DelTx,A,CPsi,funct,resol,Kx,ifft_funct)
-    DelTy = MomentumFFT(DelTy,A,CPsi,funct,resol,Ky,ifft_funct)
-    DelTz = MomentumFFT(DelTz,A,CPsi,funct,resol,Kz,ifft_funct)
-    
-
-    return np.array([np.sum(DelTx),np.sum(DelTy),np.sum(DelTz)])*spacing**3
-    
-
-def AngularMomentumDist(psi,funct,resol,Uarray,Kx,Ky,Kz,ifft_funct, distarray):
-    
-    A = np.abs(psi)
-    CPsi = np.conj(psi)
     spacing = Uarray[1]-Uarray[0]
-    DelTx, DelTy, DelTz = np.gradient(A, spacing)
     
-    DelTx = MomentumFFT(DelTx,A,CPsi,funct,resol,Kx,ifft_funct)
-    DelTy = MomentumFFT(DelTy,A,CPsi,funct,resol,Ky,ifft_funct)
-    DelTz = MomentumFFT(DelTz,A,CPsi,funct,resol,Kz,ifft_funct)
+    DelTx, DelTy, DelTz = np.gradient(PSIMagn, spacing)
+
+    DelTx = ne.evaluate('1j*PSIMagn*DelTx')
+    DelTy = ne.evaluate('1j*PSIMagn*DelTy')
+    DelTz = ne.evaluate('1j*PSIMagn*DelTz')
+
+    Gridx = ne.evaluate("1j*Kx*funct") 
+    Gridy = ne.evaluate("1j*Ky*funct")
+    Gridz = ne.evaluate("1j*Kz*funct")
+
+    DPsx = ifft_funct(Gridx)
+    DPsy = ifft_funct(Gridy)
+    DPsz = ifft_funct(Gridz)
+
+    DelTx = ne.evaluate('real(DelTx - 1j*CPsi*DPsx)')
+    DelTy = ne.evaluate('real(DelTy - 1j*CPsi*DPsy)')
+    DelTz = ne.evaluate('real(DelTz - 1j*CPsi*DPsz)')
+
+    pOut = np.array([np.sum(DelTx),np.sum(DelTy),np.sum(DelTz)])*spacing**3
     
-    Out = np.zeros(3)
+    LOut = L_jit(Uarray,DelTx,DelTy,DelTz)
+
+    LOut *= spacing**3
+
+    return pOut, LOut 
+
+def LUQuick(Uarray,DelTx,DelTy,DelTz):
+    
+    LOut = np.zeros(3)
 
     for ind in np.ndindex(DelTx.shape): 
-                
-        VectorA = np.array([DelTx[ind],DelTy[ind],DelTz[ind]])
-        
-        VectorB = np.array([Uarray[ind[0]],Uarray[ind[1]],Uarray[ind[2]]])
-        
-        Vec = np.cross(VectorA,VectorB)
-        
-        Out += Vec
+        VectorR = np.array([Uarray[ind[0]],Uarray[ind[1]],Uarray[ind[2]]])
+        VectorP = np.array([DelTx[ind],DelTy[ind],DelTz[ind]])
 
-    return Out * spacing**3
+        Vec = np.cross(VectorR,VectorP)
 
-        
+        LOut += Vec
+    
+    return LOut
+    
+L_jit = numba.jit(LUQuick)
+
 ######################### Soliton Init Factory Setting!
 
 def LoadDefaultSoliton(Silent = True):
@@ -1707,7 +1706,7 @@ IP_jit = numba.jit(isolatedPotential)
 
 PC_jit = numba.jit(planeConvolve)
  
-L_jit = numba.jit(AngularMomentumDist)   
+Lp_jit = LpEval   
     
 ######################### New Version With Built-in I/O Management
 ######################### Central Function
@@ -2135,16 +2134,17 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         
         momentum_I = 0
     
+        pOut,LOut = Lp_jit(psi,funct,resol,gridvec,Kx,Ky,Kz,ifft_funct, distarray)
+        
         if save_options[18]:
             printU('Saving ULDM momentum.','Momentum')
-            Momentum = MomentumEval(psi,funct,resol,spacing,Kx,Ky,Kz,ifft_funct)
-            np.save(os.path.join(os.path.expanduser(loc), f"Outputs/p_{momentum_I:02d}.npy"), Momentum)
+            IOSave(loc,'Momentum',momentum_I,save_format = 'npy',data = pOut)
 
         if save_options[19]:
             printU('Saving ULDM angular momentum with respect to origin.','Momentum')
-            Angular = L_jit(psi,funct,resol,gridvec,Kx,Ky,Kz,ifft_funct, distarray)
-            np.save(os.path.join(os.path.expanduser(loc), f"Outputs/L_{momentum_I:02d}.npy"), Angular)
+            IOSave(loc,'AngMomentum',momentum_I,save_format = 'npy',data = LOut)
         
+
     
     ##########################################################################################
     # SETUP PADDED POTENTIAL HERE (From JLZ)
@@ -2430,16 +2430,15 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
                 prog_bar(actual_num_steps, ix + 1, tint,'pL',PBEDisp)
 
                 momentum_I += 1
-
+                
+                pOut,LOut = Lp_jit(psi,funct,resol,gridvec,Kx,Ky,Kz,ifft_funct, distarray)
+        
                 if save_options[18]:
-                    Momentum = MomentumEval(psi,funct,resol,spacing,Kx,Ky,Kz,ifft_funct)
-                    np.save(os.path.join(os.path.expanduser(loc), f"Outputs/p_{momentum_I:02d}.npy"), Momentum)
+                    IOSave(loc,'Momentum',momentum_I,save_format = 'npy',data = pOut)
 
                 if save_options[19]:
-                    Angular = L_jit(psi,funct,resol,gridvec,Kx,Ky,Kz,ifft_funct, distarray)
-                    np.save(os.path.join(os.path.expanduser(loc), f"Outputs/L_{momentum_I:02d}.npy"), Angular)
-        
-        
+                    IOSave(loc,'AngMomentum',momentum_I,save_format = 'npy',data = LOut)
+
         psi = ifft_funct(funct)
 
 
