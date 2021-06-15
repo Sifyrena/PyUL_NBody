@@ -2675,6 +2675,7 @@ def DSManagement(save_path, Force = False):
     
     print('[',save_path,']',": The current size of the folder is", round(get_size(save_path)/1024**2,3), 'Mib')
 
+    cleardir = ''
     if get_size(save_path) == 0:
         cleardir = 'N'
     elif not Force:
