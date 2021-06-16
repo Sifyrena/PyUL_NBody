@@ -1,6 +1,6 @@
 Version   = str('PyUL2') # Handle used in console.
 D_version = str('Build 2021 Jun 08') # Detailed Version
-S_version = 23.11 # Short Version
+S_version = 23.12 # Short Version
 
 # Housekeeping
 import time
@@ -28,9 +28,7 @@ eV = 1.783e-36 # kg*c^2
 # ULDM:
 
 #m22L = float(input())
-#axion_E = float(input('Axion Mass (eV).') or 1e-22)
-
-axion_E = 1e-21
+axion_E = float(input('Axion Mass (eV).') or 1e-22)
 
 SSLength = 5
 
@@ -139,10 +137,15 @@ def GenFromTime():
 ####################### AUX. FUNCTION TO GENERATE PROGRESS BAR
 def prog_bar(iteration_number = 100, progress = 1, tinterval = 0 ,status = '',adtl = ''):
     size = 10
-    ETAStamp = time.time() + (iteration_number - progress)*tinterval
     
-    ETA = datetime.fromtimestamp(ETAStamp).strftime("%d/%m/%Y, %H:%M:%S")
+    if tinterval != 0:
+        ETAStamp = time.time() + (iteration_number - progress)*tinterval
+
+        ETA = datetime.fromtimestamp(ETAStamp).strftime("%d/%m/%Y, %H:%M:%S")
     
+    else:
+        ETA = '-'
+        
     PROG = float(progress) / float(iteration_number)
     
     if PROG >= 1.:
@@ -2675,7 +2678,6 @@ def DSManagement(save_path, Force = False):
     
     print('[',save_path,']',": The current size of the folder is", round(get_size(save_path)/1024**2,3), 'Mib')
 
-    cleardir = ''
     if get_size(save_path) == 0:
         cleardir = 'N'
     elif not Force:
@@ -3895,6 +3897,21 @@ def DefaultSolitonOrbit(resol,length, length_units, s_mass, s_mass_unit, m_radiu
     return convert_back(MInt, s_mass_unit,'m'), convert_back(VC,m_velocity_unit,'v')
 
 
+def InterpolateCurve(x,y, Resol = 1800):
+    import scipy.interpolate as SInt
+    t = np.arange(len(x))
+
+    BSplineX = SInt.make_interp_spline(t,x)
+    BSplineY = SInt.make_interp_spline(t,y)
+    
+    
+    T = np.linspace(t[0],t[-1],Resol)
+    
+    Fitx = BSplineX(T)
+    Fity = BSplineY(T)
+    
+    return Fitx, Fity
+
 # Numerical Values Cited From Hui L. et al
     
 rho0 = 0.00440
@@ -3946,4 +3963,6 @@ class Soliton_Ground:
         ma = self.ma
         value = G*M*ma/hbar * w0 **(1/2)
         return convert_between(value,'m/s',unit,'v')
+    
+    
     
