@@ -118,7 +118,7 @@ def NBStream(loc,Message):
     
 def NBDensity(loc,Density):
     file = open(f'{loc}/LocalDensities.uldm', "a+")
-    file.write(f'{Density:.8f}')  
+    file.write(f'{Density:.8f}\n')  
     file.close()
     
 def ReadLocalDensity(loc):
