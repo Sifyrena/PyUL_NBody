@@ -1,6 +1,6 @@
-Version   = str('PyUL2') # Handle used in console.
-D_version = str('Build 2021 Jun 08') # Detailed Version
-S_version = 23.12 # Short Version
+Version   = str('PyUL') # Handle used in console.
+D_version = str('Build 2021 Aug 25') # Detailed Version
+S_version = 23.4 # Short Version
 
 # Housekeeping
 import time
@@ -29,6 +29,8 @@ eV = 1.783e-36 # kg*c^2
 
 #m22L = float(input())
 axion_E = float(input('Axion Mass (eV).') or 1e-22)
+
+#axion_E = 1e-22
 
 SSLength = 5
 
@@ -118,7 +120,7 @@ def NBStream(loc,Message):
     
 def NBDensity(loc,Density):
     file = open(f'{loc}/LocalDensities.uldm', "a+")
-    file.write(f'{Density:.8f}\n')  
+    file.write(f'{Density:.8f}')  
     file.close()
     
 def ReadLocalDensity(loc):
@@ -1015,9 +1017,18 @@ FWNBody3_NI = FWNBody_NI
 
 def NBodyAdvance(TMState,h,masslist,phiSP,a,lengthC,resol,NS,loc = '',Stream = False, StreamChar = ''):
         #
+        
+        
         if NS == 0: # NBody Dynamics Off
+            StateLen = len(TMState)
             
-            Step, GradientLog = FWNBody3(0,TMState,masslist,phiSP,a,lengthC,resol)
+            GradientLog = np.zeros_like(TMState)
+            
+            for i in range(StateLen//6):
+                
+                for j in range(3):    
+                    TMState[6*i+j] += h * TMState[6*i+j+3]
+            
             
             return TMState, GradientLog
         
@@ -1053,9 +1064,18 @@ def NBodyAdvance_NI(TMState,h,masslist,phiSP,a,lengthC,resol,NS):
         #
         if NS == 0: # NBody Dynamics Off
             
-            Step, GradientLog = FWNBody3_NI(0,TMState,masslist,phiSP,a,lengthC,resol)
+            StateLen = len(TMState)
+            
+            GradientLog = np.zeros_like(TMState)
+            
+            for i in range(StateLen//6):
+                
+                for j in range(3):    
+                    TMState[6*i+j] += h * TMState[6*i+j+3]
+            
             
             return TMState, GradientLog
+        
         
         if NS == 1:
  
@@ -1081,10 +1101,10 @@ def NBodyAdvance_NI(TMState,h,masslist,phiSP,a,lengthC,resol,NS):
 
             return TMStateOut, GradientLog
 
-######################### June Addition (Momentum)
+######################### Early June Addition (Momentum)
 
 
-def LpEval(psi,funct,resol,Uarray,Kx,Ky,Kz,ifft_funct):
+def LpEval(psi,rho,funct,resol,Uarray,Kx,Ky,Kz,ifft_funct):
     
     funct *= 1j
     
@@ -1132,6 +1152,39 @@ def LUQuick(Uarray,DelTx,DelTy,DelTz):
     return L
     
 L_jit = numba.jit(LUQuick)
+
+###
+###
+###
+#### Mid June Addition (Momentum)
+
+def WrapToCircle(Array):
+    
+    Array[Array<np.pi] += np.pi*2
+    Array[Array>np.pi] -= np.pi*2
+    
+    return Array
+
+
+
+def LpEvalFast(psi,rho, funct,resol,Uarray,Kx,Ky,Kz,ifft_funct):
+ 
+    Theta = np.angle(psi)
+    spacing = Uarray[1]-Uarray[0]
+        
+    DTx, DTy, DTz = np.gradient(Theta, 1)
+    
+    DTx = WrapToCircle(DTx)/spacing * rho
+    DTy = WrapToCircle(DTy)/spacing * rho
+    DTz = WrapToCircle(DTz)/spacing * rho
+        
+    pOut = -1 * np.array([np.sum(DTx),np.sum(DTy),np.sum(DTz)])*spacing**3
+    
+    LOut = L_jit(Uarray,DTx,DTy,DTz)
+
+    LOut *= spacing**3
+
+    return pOut, LOut 
 
 ######################### Soliton Init Factory Setting!
 
@@ -1710,7 +1763,7 @@ IP_jit = numba.jit(isolatedPotential)
 
 PC_jit = numba.jit(planeConvolve)
  
-Lp_jit = LpEval   
+Lp_jit = LpEvalFast
     
 ######################### New Version With Built-in I/O Management
 ######################### Central Function
@@ -1961,7 +2014,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         if len(psiEx) != resol:
             raise ValueError('Loaded grid is not currently compatible with run settings!')
         print("======================================================")
-        printU(f"IO: Loaded initial wavefunction from {InitPath}",'IO')
+        printU(f"Loaded initial wavefunction from {InitPath}",'IO')
         
         MassCom = Density*lengthC**3
 
@@ -2136,7 +2189,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         
         momentum_I = 0
     
-        pOut,LOut = Lp_jit(psi,funct,resol,gridvec,Kx,Ky,Kz,ifft_funct)
+        pOut,LOut = Lp_jit(psi,rho,funct,resol,gridvec,Kx,Ky,Kz,ifft_funct)
         
         if save_options[18]:
             printU('Saving ULDM momentum.','Momentum')
@@ -2431,7 +2484,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
 
                 momentum_I += 1
                 
-                pOut,LOut = Lp_jit(psi,funct,resol,gridvec,Kx,Ky,Kz,ifft_funct)
+                pOut,LOut = Lp_jit(psi,rho,funct,resol,gridvec,Kx,Ky,Kz,ifft_funct)
         
                 if save_options[18]:
                     IOSave(loc,'Momentum',momentum_I,save_format = 'npy',data = pOut)
@@ -2761,15 +2814,15 @@ def Load_Data(save_path,ts,save_options,save_number):
     
     
     if save_plane:
-        print('ULHelper: Loaded Planar Mass Density Data \n')
+        printU('Loaded Planar Mass Density Data \n')
     if save_testmass:
-        print('ULHelper: Loaded Test Mass State Data \n')
+        printU('Loaded Test Mass State Data \n')
     if save_phi_plane:
-        print('ULHelper: Loaded Planar Gravitational Field Data \n')
+        printU('Loaded Planar Gravitational Field Data \n')
     if save_gradients:
-        print('ULHelper: Loaded Test Mass Gradient Data \n')
+        printU('Loaded Test Mass Gradient Data \n')
     if save_phase_plane:
-        print('ULHelper: Loaded Planar ULD Phase Data \n')
+        printU('Loaded Planar ULD Phase Data \n')
         
 
     
@@ -2800,7 +2853,7 @@ def Load_Data(save_path,ts,save_options,save_number):
 
             break
         
-    print("ULHelper: Loaded", EndNum, "Data Entries")
+    printU("Loaded", EndNum, "Data Entries")
     return EndNum, data,  TMdata, phidata,    graddata, phasedata
 
 
@@ -2961,21 +3014,21 @@ def EmbedParticle(particles,embeds,solitons):
         Mass = Mollusk[0]*Mollusk[3]
         
 
-        print(f"ULHelper: Calculating and loading the mass of embedded particle #{EI}.")
+        printU(f"Calculating and loading the mass of embedded particle #{EI}.")
         Pearl = [Mass,Mollusk[1],Mollusk[2]]
 
         if not (Pearl in particles):
             particles.append(Pearl)
         
         if Mollusk[3] == 0:
-            print(f"ULHelper: Embed structure #{EI} contains no black hole. Moving to regular solitons list.")
+            printU(f"Embed structure #{EI} contains no black hole. Moving to regular solitons list.")
             
             Shell = [Mollusk[0],Mollusk[1],Mollusk[2],Mollusk[4]]
             solitons.append(Shell)
             embeds.remove(Mollusk)
             
         if Mollusk[3] == 1:
-            print(f"ULHelper: Embed structure #{EI} contains no ULDM. Removing from list.")
+            printU(f"Embed structure #{EI} contains no ULDM. Removing from list.")
             
             Shell = [Mollusk[0],Mollusk[1],Mollusk[2],Mollusk[4]]
             embeds.remove(Mollusk)
@@ -3144,7 +3197,7 @@ def GenerateConfig(NS, length, length_units, resol, duration, duration_units, st
 
         
     if not NoInteraction:
-        print('ULHelper: Compiled Config in Folder', timestamp)
+        printU(('Compiled Config in Folder', timestamp))
 
     return timestamp
     
@@ -3180,7 +3233,7 @@ def Runs(save_path, Automatic = True):
         Ind = (input() or int(-1))
 
         if Ind == -1 and Automatic:
-            print(f"ULHelper: Loading {Latest}")
+            printU(f"Loading {Latest}")
             return Latest
         
         elif Ind.startswith('X'):
@@ -3197,7 +3250,7 @@ def Runs(save_path, Automatic = True):
         else:
             Ind = int(Ind)
             Ind = Log[Ind]
-            print(f"ULHelper: Loading {runs[Ind]}")
+            printU(f"Loading {runs[Ind]}")
             return runs[Ind]
 
 def LoadConfig(loc):
