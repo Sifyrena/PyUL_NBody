@@ -1,6 +1,6 @@
 Version   = str('PyUL') # Handle used in console.
 D_version = str('Build 2021 Aug 25') # Detailed Version
-S_version = 23.4 # Short Version
+S_version = 23.5 # Short Version
 
 # Housekeeping
 import time
