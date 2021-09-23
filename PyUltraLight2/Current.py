@@ -3411,7 +3411,7 @@ def FOSR(m,r):
 def FOSU(m,r):
     return np.sqrt(m/r)
 
-def PopulateWithStars(NStars, MaxMass, embeds, particles, resol, length, length_units, s_mass_unit, m_position_unit, m_velocity_unit, rIn = 0.4, rOut = 1.2):
+def PopulateWithStars(NStars, MaxMass, embeds, particles, resol, length, length_units, s_mass_unit, m_position_unit, m_velocity_unit, rIn = 0.4, rOut = 1.2, Sequential = False, CircDiv = 8):
 
     for Halo in embeds:
               
@@ -3428,23 +3428,50 @@ def PopulateWithStars(NStars, MaxMass, embeds, particles, resol, length, length_
         
         for i in range(NStars):
 
-            r = (np.random.random()*(rOut-rIn) + rIn) * SolSizeL
             
-            Mass = MaxMass*np.random.random()
+            if Sequential:
+                r = ((i+1)/NStars*(rOut-rIn) + rIn) * SolSizeL
+                
+                Mass = MaxMass
+                
+                
+                for j in range(CircDiv):
+                
+                    theta = j/CircDiv * 2 * np.pi
 
-            theta = 2*np.pi*np.random.random()
+
+
+                    m_temp, v = DefaultSolitonOrbit(resol,length, length_units, SolMass, s_mass_unit, r, m_position_unit, m_velocity_unit)
+
+                    Position = np.array([r*np.cos(theta),r*np.sin(theta),0]) + GPos
+
+
+
+                    Velocity = np.array([v*np.sin(theta),-v*np.cos(theta),0])  + GVel
+
+
+
+                    particles.append([Mass,Position.tolist(),Velocity.tolist()])
+                
+                
+            else:
+                r = (np.random.random()*(rOut-rIn) + rIn) * SolSizeL
             
-            m_temp, v = DefaultSolitonOrbit(resol,length, length_units, SolMass, s_mass_unit, r, m_position_unit, m_velocity_unit)
+                Mass = MaxMass*np.random.random()
 
-            Position = np.array([r*np.cos(theta),r*np.sin(theta),0]) + GPos
+                theta = 2*np.pi*np.random.random()
             
+                m_temp, v = DefaultSolitonOrbit(resol,length, length_units, SolMass, s_mass_unit, r, m_position_unit, m_velocity_unit)
 
-            
-            Velocity = np.array([v*np.sin(theta),-v*np.cos(theta),0])  + GVel
+                Position = np.array([r*np.cos(theta),r*np.sin(theta),0]) + GPos
 
-            
 
-            particles.append([Mass,Position.tolist(),Velocity.tolist()])
+
+                Velocity = np.array([v*np.sin(theta),-v*np.cos(theta),0])  + GVel
+
+
+
+                particles.append([Mass,Position.tolist(),Velocity.tolist()])
 
     return particles
 
