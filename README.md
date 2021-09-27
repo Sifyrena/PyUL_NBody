@@ -4,15 +4,15 @@
 
 The code requires the following standard Python libraries
 
-  numba, numexpr, pyfftw, multiprocessing
+    numba, numexpr, pyfftw, multiprocessing
   
 as well as up-to-date versions of
   
-  scipy, matplotlib
+    scipy, matplotlib
 
 In order to enable media output capabilities, you need a properly configured distribution of 
 
-  ffmpeg
+    ffmpeg
 
 # The ULDM File Type
 
