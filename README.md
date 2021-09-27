@@ -15,9 +15,7 @@ While the supplied auxillary functions can also produce
 * N body orbital properties, and
 * Estimates of dynamical friction force and related timescales.
 
-
-
-A guide on how to save and process these files will be included in the later section.
+The Jupyter notebooks shipped with the integrator contain a minimal analysis suite that is capable of plotting N body orbits, ULDM density contours and ULDM phases. In addition, a guide on how to save and process these files will be included in the later section.
 
 
 # Python Library Prerequisites
