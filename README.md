@@ -92,19 +92,19 @@ The ``evolve`` method contains several optional settings, and a brief summary is
 
     3Wfn
     
-**To save ULDM densities**
+**To save ULDM densities** (xyz cube, xy plane, x axis)
 
     3Density 2Density 1Density
     
-**To save ULDM gravitational fields**
+**To save ULDM gravitational fields** (xyz cube, xy plane, x axis)
 
     3Grav 2Grav 1Grav
     
-**To save total gravitational fields**
+**To save total gravitational fields** (xyz cube, xy plane, x axis)
 
     3GravF 2GravF 1GravF
     
-**To save phase in the x-y plane**
+**To save phase in the x-y plane** 
 
     2Phase
 
