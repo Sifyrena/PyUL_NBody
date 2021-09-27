@@ -1,5 +1,17 @@
 <center><img src="PyULLogo.png" alt="Logo" width="560" align = "center"/></center>
 
+# Purpose of the Library, and Current Capabilities
+
+To evolve a rigid N body particle ensemble and a mesh-based ULDM cluster in time, against an non-expanding background.
+
+The main numerical routine is currently capable of generating 
+
+* N body position and velocity state vectors
+* ULDM density, gravitational field strength, momentum, angular momentum, and energy
+
+A guide on how to save and process these files will be included in the later section.
+
+
 # Python Library Prerequisites
 
 The code requires the following standard Python libraries
@@ -61,3 +73,52 @@ The ``evolve`` method contains several optional settings, and a brief summary is
 | Silent        | False            | Print minimal information,                                              |
 | Message       | ' '              | Additional message to print in console (useful for numerous calls).     |
 
+
+# Supported save options:
+
+*The options text should not contain commas. Please separate options with a space.*
+
+**Please Always Include**
+
+    Energy NBody DF
+
+**To save the entire grid (not recommended)**
+
+    3Wfn
+    
+**To save ULDM densities**
+
+    3Density 2Density 1Density
+    
+**To save ULDM gravitational fields**
+
+    3Grav 2Grav 1Grav
+    
+**To save total gravitational fields**
+
+    3GravF 2GravF 1GravF
+    
+**To save phase in the x-y plane**
+
+    2Phase
+
+**Bonus features**
+
+    Entropy 
+(saves the sum of ρlogρ)
+    
+    AngMomentum
+(with respect to origin, time-consuming)
+    
+    Momentum
+(very time-consuming)
+    
+    
+
+***Bonus Memory Saver ***
+
+    Save_Options = "Minimum"
+    
+This will be automatically translated to 
+    
+    Energy 1Density NBody DF Entropy
