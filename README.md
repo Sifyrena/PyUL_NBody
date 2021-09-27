@@ -18,6 +18,13 @@ While the supplied auxillary functions can also produce
 The Jupyter notebooks shipped with the integrator contain a minimal analysis suite that is capable of plotting N body orbits, ULDM density contours and ULDM phases. In addition, a guide on how to save and process these files will be included in the later section.
 
 
+# Known Issues
+
+* In the current version, if you rely on the included generative functions to initialise your simulation, there is a chance that your x and y coordinates may be swapped. **Temporary Remedy:** Call ``PyUL.VizInit2D(length,length_units,resol,embeds,
+              solitons,s_position_unit, s_mass_unit,
+              particles,m_position_unit, Uniform, Density, UVel, rP, VScale = 1)`` to generate an 2D preview of the simulation grid.
+
+
 # Python Library Prerequisites
 
 The code requires the following standard Python libraries
