@@ -1,4 +1,4 @@
-<center><img src="PyULLogo.png" alt="Logo" width="200" align = "center"/></center>
+<center><img src="PyULLogo.png" alt="Logo" width="560" align = "center"/></center>
 
 # Python Library Prerequisites
 
@@ -30,3 +30,28 @@ import PyUltraLight2 as PyUL
 PyUL.evolve('/PATH_TO_FOLDER','FOLDER')
 
 ```
+
+You will be prompted to pick an axion mass (e.g. 1e-22) upon the first import of the PyUL library.
+
+The ``evolve`` method contains several optional settings, and a brief summary is supplied below
+
+
+| Flag | Type and Default Value | Explanation |
+
+EdgeClear=False,  # Reflexive Boundary Condition (Half Baked)
+    DumpInit=False,  # Dump Initial Wavefunction
+    DumpFinal=False,  # Dump Final Wavefunction
+    UseInit=False,  # Use Initial Wavefunction (Specify in InitPath)
+    IsoP=False,  # Use Zero Padded Potential
+    UseDispSponge=False,  # Dispersive Sponge Boundary Condition
+    SelfGravity=True, # ULDM Feels Own Gravity
+    NBodyInterp=True, # N body Particle Feels ULDM Gravity
+    NBodyGravity=True,# ULDM Feels N body Gravity
+    Silent=False,  # Quiet Mode
+    AutoStop=False,  # Stop simulation with BH
+    AutoStop2=False,  # Stop when ULDM gravitational field strength becomes unstable by
+    WellThreshold=100,  # this much.
+    InitPath=InitPath,  # 
+    InitWeight=1, # Blend factor of loaded Wavefunction (Set InitWeight to -1 to utilize the phase only)
+    Stream=False,  # Write RK Step Results To File (Not Used)
+    StreamChar=[1, 4])  # Locations in the vectorized TMState to Stream. (x-y flipped).
