@@ -54,8 +54,7 @@ The ``evolve`` method contains several optional settings, and a brief summary is
 | Stream        | False            | Save all intermediate N body steps to file.                             |
 | StreamChar    | [1,4]            | Vectorised N body state components to stream.                           |
 |               |                  |                                                                         |
-
-| AutoStop      | False            | Halt based on first particle's speed.                                   |
+| AutoStop      | False            | Halt based if first particle stops.                                     |
 | AutoStop2     | False            | Halt based on the deepest potential well (see below).                   |
 | WellThreshold | 100              | Lowest tolerable well depth divided by lowest particle potential value. |
 |               |                  |                                                                         |
