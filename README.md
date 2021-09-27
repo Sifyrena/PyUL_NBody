@@ -4,10 +4,18 @@
 
 To evolve a rigid N body particle ensemble and a mesh-based ULDM cluster in time, against an non-expanding background, with flexible settings, good energy-conservation, and easy expandability.
 
-The main numerical routine is currently capable of generating 
+The main integrator is currently capable of generating 
 
-* N body position and velocity state vectors
-* ULDM density, gravitational field strength, momentum, angular momentum, and energy
+* N body position and velocity state vectors, and
+* ULDM density, gravitational field strength, momentum, angular momentum, and energy.
+
+While the supplied auxillary functions can also produce
+
+* System energy and entropy,
+* N body orbital properties, and
+* Estimates of dynamical friction force and related timescales.
+
+
 
 A guide on how to save and process these files will be included in the later section.
 
