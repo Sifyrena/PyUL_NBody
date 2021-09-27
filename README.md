@@ -20,9 +20,14 @@ The Jupyter notebooks shipped with the integrator contain a minimal analysis sui
 
 # Known Issues
 
-* In the current version, if you rely on the included generative functions to initialise your simulation, there is a chance that your x and y coordinates may be swapped. **Temporary Remedy:** Call ``PyUL.VizInit2D(length,length_units,resol,embeds,
+* In the current version, if you rely on the included generative functions to initialise your simulation, there is a chance that your x and y coordinates may be swapped. **Temporary Remedy:** Call 
+ 
+```python
+PyUL.VizInit2D(length,length_units,resol,embeds,
               solitons,s_position_unit, s_mass_unit,
-              particles,m_position_unit, Uniform, Density, UVel, rP, VScale = 1)`` to generate an 2D preview of the simulation grid.
+              particles,m_position_unit, Uniform, Density, UVel, rP, VScale = 1)
+```
+to generate an 2D preview of the simulation grid.
 
 
 # Python Library Prerequisites
