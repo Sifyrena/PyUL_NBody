@@ -2,7 +2,7 @@
 
 # Purpose of the Library, and Current Capabilities
 
-To evolve a rigid N body particle ensemble and a mesh-based ULDM cluster in time, against an non-expanding background.
+To evolve a rigid N body particle ensemble and a mesh-based ULDM cluster in time, against an non-expanding background, with flexible settings, good energy-conservation, and easy expandability.
 
 The main numerical routine is currently capable of generating 
 
@@ -115,10 +115,10 @@ The ``evolve`` method contains several optional settings, and a brief summary is
     
     
 
-***Bonus Memory Saver ***
+**Bonus Memory Saver **
 
     Save_Options = "Minimum"
     
 This will be automatically translated to 
     
-    Energy 1Density NBody DF Entropy
+    Energy 1Density NBody DF
