@@ -119,8 +119,8 @@ def NBStream(loc,Message):
     file.close()
     
 def NBDensity(loc,Density):
-    file = open(f'{loc}/LocalDensities.uldm', "a+")
-    file.write(f'{Density:.8f}')  
+    file = open(f'{loc}/LocalDensities.uldm', "w+")
+    file.write(f'{Density:.8f}')
     file.close()
     
 def ReadLocalDensity(loc):
@@ -1840,6 +1840,9 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     
     PyULConfig["Integrator Version"] = S_version
 
+    PyULConfig["Axion Mass"] = axion_mass
+    PyULConfig["m22"] = axion_mass * 10**22 /eV
+    
     PyULConfig["Integration Modifiers"] = ({
     "Integration Method": Method,
     "Dispersive Sponge Condition": UseDispSponge,
@@ -3598,7 +3601,7 @@ def ParameterScanGenerator(path_to_config,ScanParams,ValuePool,save_path,
     NS, length, length_units, resol, duration, duration_units, step_factor, save_number, SO, save_format, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, embeds, Uniform,Density, density_unit,a, UVel = LoadConfig(path_to_config)
     
     if SaveSpace:
-        save_options = 'Minimal'
+        save_options = 'Minimum'
     else:
         save_options = SaveOptionsCompile(SO)
     
