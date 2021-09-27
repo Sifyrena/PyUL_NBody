@@ -126,17 +126,16 @@ The ``evolve`` method contains several optional settings, and a brief summary is
 (saves the sum of ρlogρ)
     
     AngMomentum
-(with respect to origin, time-consuming)
+(with respect to origin, very time-consuming)
     
     Momentum
 (very time-consuming)
     
     
-
-**Bonus Memory Saver **
+**Memory Saver**
 
     Save_Options = "Minimum"
     
-This will be automatically translated to 
+which will be treated exactly the same as
     
     Energy 1Density NBody DF
