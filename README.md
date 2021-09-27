@@ -36,22 +36,29 @@ You will be prompted to pick an axion mass (e.g. 1e-22) upon the first import of
 The ``evolve`` method contains several optional settings, and a brief summary is supplied below
 
 
-| Flag | Type and Default Value | Explanation |
+| Flag.         | Default          |Explanation                                                              |
+|---------------|------------------|-------------------------------------------------------------------------|
+|               |                  |                                                                         |
+| EdgeClear     | False            | Use reflexive boundary condition.                                       |
+| IsoP          | False            | Use padded potential when evaluating $\Phi_U$.                          |
+| UseDispSponge | False            | Use dispersive sponge conditions.                                       |
+|               |                  |                                                                         |
+| SelfGravity   | True             | ULDM reacts to its own gravitational field.                             |
+| NBodyInterp   | True             | N body reacts to ULDM gravitational field.                              |
+| NBodyGravity  | True             | ULDM reacts to N body Gravity.                                          |
+|               |                  |                                                                         |
+| DumpInit      | False            | Save initial wavefunction to file.                                      |
+| DumpFinal     | False            | Save final wavefunction to file.                                        |
+| UseInit       | False            | Use dumped wavefunction.                                                |
+| InitPath      | ' '              | Path to wavefunction to use.                                            |
+| Stream        | False            | Save all intermediate N body steps to file.                             |
+| StreamChar    | [1,4]            | Vectorised N body state components to stream.                           |
+|               |                  |                                                                         |
 
-EdgeClear=False,  # Reflexive Boundary Condition (Half Baked)
-    DumpInit=False,  # Dump Initial Wavefunction
-    DumpFinal=False,  # Dump Final Wavefunction
-    UseInit=False,  # Use Initial Wavefunction (Specify in InitPath)
-    IsoP=False,  # Use Zero Padded Potential
-    UseDispSponge=False,  # Dispersive Sponge Boundary Condition
-    SelfGravity=True, # ULDM Feels Own Gravity
-    NBodyInterp=True, # N body Particle Feels ULDM Gravity
-    NBodyGravity=True,# ULDM Feels N body Gravity
-    Silent=False,  # Quiet Mode
-    AutoStop=False,  # Stop simulation with BH
-    AutoStop2=False,  # Stop when ULDM gravitational field strength becomes unstable by
-    WellThreshold=100,  # this much.
-    InitPath=InitPath,  # 
-    InitWeight=1, # Blend factor of loaded Wavefunction (Set InitWeight to -1 to utilize the phase only)
-    Stream=False,  # Write RK Step Results To File (Not Used)
-    StreamChar=[1, 4])  # Locations in the vectorized TMState to Stream. (x-y flipped).
+| AutoStop      | False            | Halt based on first particle's speed.                                   |
+| AutoStop2     | False            | Halt based on the deepest potential well (see below).                   |
+| WellThreshold | 100              | Lowest tolerable well depth divided by lowest particle potential value. |
+|               |                  |                                                                         |
+| Silent        | False            | Print minimal information,                                              |
+| Message       | ' '              | Additional message to print in console (useful for numerous calls).     |
+
