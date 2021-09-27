@@ -20,4 +20,13 @@ In order to enable media output capabilities, you need a properly configured dis
 
 # Basic Command Line Usage
 
-PyUltraLight 2 operates on similar user-interactivity logic as other command-line based simulation codes. The simplest operation assumes one has 
+PyUltraLight 2 operates on similar user-interactivity logic as other command-line based simulation codes. The simplest operation assumes one has a config.uldm file enclosed in /PATH_TO_FOLDER/FOLDER.
+
+Working at the root directory of PyUltraLight2, one may issue the following Python commands in a terminal:
+
+```python
+
+import PyUltraLight2 as PyUL
+PyUL.evolve('/PATH_TO_FOLDER','FOLDER')
+
+```
