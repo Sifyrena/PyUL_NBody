@@ -20,7 +20,9 @@ The Jupyter notebooks shipped with the integrator contain a minimal analysis sui
 
 # Known Issues
 
-* In the current version, if you rely on the included generative functions to initialise your simulation, there is a chance that your x and y coordinates may be swapped. **Temporary Remedy:** Call 
+* In the current version, if you rely on the included generative functions to initialise your simulation, there is a chance that your x and y coordinates may be swapped. 
+
+**Temporary Remedy:** Call 
  
 ```python
 PyUL.VizInit2D(length,length_units,resol,embeds,
@@ -28,6 +30,9 @@ PyUL.VizInit2D(length,length_units,resol,embeds,
               particles,m_position_unit, Uniform, Density, UVel, rP, VScale = 1)
 ```
 to generate an 2D preview of the simulation grid.
+
+
+* The soliton profile generator is NOT optimized for axion masses other than 1e-22 and mass ratios (BH:ULDM) above 15%. Documentation will be updated after the work concerning those functionalities are published.
 
 
 # Python Library Prerequisites
