@@ -1,5 +1,14 @@
 <center><img src="PyULLogo.png" alt="Logo" width="560" align = "center"/></center>
 
+# Authorship and Contact
+
+This version: Yourong F. Wang (Sifyrena)
+
+Original PyUltraLight Dev. Team
+Edwards, F., Kendall, E., Hotchkiss, S. & Easther, R. [arxiv.org/abs/1807.04037]
+
+
+
 # Purpose of the Library, and Current Capabilities
 
 To evolve a rigid N body particle ensemble and a mesh-based ULDM cluster in time, against an non-expanding background, with flexible settings, good energy-conservation, and easy expandability.
