@@ -2,10 +2,17 @@
 
 # Authorship and Contact
 
-This version: Yourong F. Wang (Sifyrena)
+**This version:** Yourong F. Wang 
 
-Original PyUltraLight Dev. Team
-Edwards, F., Kendall, E., Hotchkiss, S. & Easther, R. [arxiv.org/abs/1807.04037]
+Sifyrena.github.io
+
+FWPhys.com
+
+**Original PyUltraLight Dev. Team:**
+
+Edwards, F., Kendall, E., Hotchkiss, S. & Easther, R. 
+
+arxiv.org/abs/1807.04037
 
 
 
