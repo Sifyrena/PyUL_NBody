@@ -28,7 +28,7 @@ eV = 1.783e-36 # kg*c^2
 # ULDM:
 
 #m22L = float(input())
-axion_E = float(input('Axion Mass (eV).') or 1e-22)
+axion_E = float(input('Axion Mass (eV). Blank for 1e-22 eV') or 1e-22)
 
 #axion_E = 1e-22
 
@@ -2363,10 +2363,10 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     if NumTM == 1:
         Vinitial = TMState[3:6]
     
-    TMStateDisp = TMState.reshape((-1,6))
-    
-    printU(f"The test mass initial state (vectorised) is:", 'NBody')
-    print(TMStateDisp)
+    #TMStateDisp = TMState.reshape((-1,6))
+    #
+    #printU(f"The test mass initial state (vectorised) is:", 'NBody')
+    #print(TMStateDisp)
         
     MI = 0
     
