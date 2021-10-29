@@ -253,7 +253,9 @@ print(f"Release: {uname.release}")
 print(f"Version: {uname.version}")
 print(f"Machine: {uname.machine}")
 print(f"Processor: {uname.processor}")
-print(f"\nResolution: {resol}")
+
+print(f"\nAvailable CPU Threads: {multiprocessing.cpu_count()}")
+print(f"Resolution: {resol}")
 print(f"Avg Step (s): {DPS:.3g}")
 print("="*80)
 
