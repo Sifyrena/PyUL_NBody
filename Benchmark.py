@@ -10,7 +10,7 @@ print("Welcome to PyUltraLight 2 Performance Benchmark")
 
 print("Please key in the letter for a specific resolution. ENTER to confirm")
 
-print("A) 256³. B) 384³. C) 512³")
+print("[Potato] 64³. [A] 256³. [B] 384³. [C] 512³. [D] 1024³")
 
 userinput = input()
 
@@ -20,23 +20,46 @@ elif userinput == 'A' or userinput == 'a':
     resol = 256
 elif userinput == 'B' or userinput == 'b':
     resol = 384
+elif userinput == 'D' or userinput == 'd':
+    resol = 1024
 else:
     resol = 512
 
-
-print("Please press ENTER again to proceed.")
       
 print("Note: This script will produce outputs in the path [PyUL]/Bench/.")
 
-print("\n\n")
+print("\n")
 
 import os
 import numpy as np
 
+import subprocess
+import sys
+
+def install(package):
+    subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+
 try:
+    print("Please press ENTER again to proceed.")
     import PyUltraLight2 as PyUL
 except ModuleNotFoundError:
-    raise ImportError("Some required packages are not found.")
+    
+    print("WARNING: Your current Python Executable failed to locate some required packages. [Y] to automatically attempt to resolve the issue. [N] if you with to install the packages manually. ")
+    
+    userinput = input()
+    
+    if userinput == 'Y':
+      
+        install('pyfftw')
+        install('numba')
+        install('numexpr')
+        install('multiprocessing')
+        print("Please press ENTER again to proceed.")
+        import PyUltraLight2 as PyUL
+        
+    else:
+        raise RuntimeError("Benchmark Aborted!")
+
 
 
 ###### Do not touch

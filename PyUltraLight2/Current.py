@@ -221,7 +221,7 @@ def ULDStepEst(duration,duration_units,length,length_units,resol,step_factor, sa
     min_num_steps = np.ceil(t / delta_t)
     MinUS = int(min_num_steps//step_factor)
 
-    print(f'The required number of ULDM steps is {MinUS}')
+    #print(f'The required number of ULDM steps is {MinUS}')
     
     if save_number > 0:
         
@@ -231,7 +231,7 @@ def ULDStepEst(duration,duration_units,length,length_units,resol,step_factor, sa
         else:
             MinUS = int(save_number * (MinUS // (save_number) + 1))
             
-    print(f'The actual ULDM steps is {MinUS}')
+    #print(f'The actual ULDM steps is {MinUS}')
     
     return MinUS
 
