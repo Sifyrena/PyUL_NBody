@@ -1,6 +1,6 @@
 Version   = str('PyUL') # Handle used in console.
-D_version = str('Build 2022 Feb 01') # Detailed Version
-S_version = 24.0 # Short Version
+D_version = str('Build 2021 Aug 25') # Detailed Version
+S_version = 23.5 # Short Version
 
 # Housekeeping
 import time
@@ -162,7 +162,7 @@ def prog_bar(iteration_number = 100, progress = 1, tinterval = 0 ,status = '',ad
         PM = ''
         PL = 0
     else:
-        CM = '○'
+        CM = '●'
         PM = '◎' 
         PL = 1
     
@@ -174,7 +174,7 @@ def prog_bar(iteration_number = 100, progress = 1, tinterval = 0 ,status = '',ad
     LL = size - block
     RL = size - block
 
-    BarText = "●" * LL + PM * PL + CM * CL + PM * PL + "●" * RL
+    BarText = "○" * LL + PM * PL + CM * CL + PM * PL + "○" * RL
     
     shift = int(-1 * progress % (2*size+1))
 
@@ -551,7 +551,8 @@ def initsoliton(funct, xarray, yarray, zarray, position, alpha, f, delta_x,Cutof
         distfromcentre = (
             (xarray[index[0], 0, 0] - position[0]) ** 2 +
             (yarray[0, index[1], 0] - position[1]) ** 2 +
-            (zarray[0, 0, index[2]] - position[2]) ** 2 ) ** 0.5
+            (zarray[0, 0, index[2]] - position[2]) ** 2
+            ) ** 0.5
         # Utilises soliton profile array out to dimensionless radius 5.6.
         if (np.sqrt(alpha) * distfromcentre <= Cutoff):
          
@@ -1981,7 +1982,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     ##########################################################################################
     # SET UP THE REAL SPACE COORDINATES OF THE GRID - FW Revisit
 
-    gridvec = np.linspace(-lengthC / 2.0, lengthC / 2.0, resol, endpoint = False) # careful!
+    gridvec = np.linspace(-lengthC / 2.0, lengthC / 2.0, resol, endpoint=False)
     
     xarray, yarray, zarray = np.meshgrid(
         gridvec, gridvec, gridvec,
@@ -2205,17 +2206,16 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     
     ##########################################################################################
     # SETUP PADDED POTENTIAL HERE (From JLZ)
+
+    rhopad = pyfftw.zeros_aligned((2*resol, resol, resol), dtype='float64')
+    bigplane = pyfftw.zeros_aligned((2*resol, 2*resol), dtype='float64')
+
+    fft_X = pyfftw.builders.fftn(rhopad, axes=(0, ), threads=num_threads)
+    ifft_X = pyfftw.builders.ifftn(rhopad, axes=(0, ), threads=num_threads)
+
+    fft_plane = pyfftw.builders.fftn(bigplane, axes=(0, 1), threads=num_threads)
+    ifft_plane = pyfftw.builders.ifftn(bigplane, axes=(0, 1), threads=num_threads)
     
-    if IsoP:
-        rhopad = pyfftw.zeros_aligned((2*resol, resol, resol), dtype='complex128')
-        bigplane = pyfftw.zeros_aligned((2*resol, 2*resol), dtype='complex128')
-
-        fft_X = pyfftw.builders.fftn(rhopad, axes=(0, ), threads=num_threads)
-        ifft_X = pyfftw.builders.ifftn(rhopad, axes=(0, ), threads=num_threads)
-
-        fft_plane = pyfftw.builders.fftn(bigplane, axes=(0, 1), threads=num_threads)
-        ifft_plane = pyfftw.builders.ifftn(bigplane, axes=(0, 1), threads=num_threads)
-
     phiSP = pyfftw.zeros_aligned((resol, resol, resol), dtype='float64')
     phiTM = pyfftw.zeros_aligned((resol, resol, resol), dtype='float64') # New, separate treatment.
 
@@ -2504,7 +2504,8 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
             psi *= np.exp(-PreMult*h)
         
 
-        rho = ne.evaluate("abs(abs(psi)**2)").real
+        rho = ne.evaluate("abs(abs(psi)**2)")
+        rho = rho.real
 
         phik = rfft_rho(rho)  # not actually phik but phik is defined in next line
             
@@ -3993,51 +3994,6 @@ def InterpolateCurve(x,y, Resol = 1800):
     Fity = BSplineY(T)
     
     return Fitx, Fity
-
-
-
-def FindBoxCOM(Darray,xG, yG, zG, Silent = True):
-    
-    Mass = np.sum(Darray)
-
-    COM = np.array([np.sum(xG * Darray),np.sum(yG * Darray),np.sum(zG * Darray)])/Mass
-    
-    if not Silent:
-        print(COM)
-    
-    return COM
-
-
-def FindBoxCOMSpeed(COMLog, hC = 1):
-    
-    CMVLog = []
-    
-    # First Step
-
-    CMVLog.append((COMLog[1]-COMLog[0])/hC)
-
-    # Central Steps
-    for i in range(1,len(COMLog)-1):  
-        CMVLog.append((COMLog[i+1]-COMLog[i-1])/(2*hC))
-
-
-    CMVLog.append((COMLog[-1]-COMLog[-2])/hC)
-
-    return CMVLog
-
-
-#### not very useful
-def GalShift(psi,v):
-    velx = v[0]
-    vely = v[1]
-    velz = v[2]
-    return ne.evaluate("exp(1j*(velx*xG + vely*yG + velz*zG - 0.5*(velx*velx+vely*vely+velz*velz)*hC*i))*psi")
-    
-
-    
-def MaxVel(gridsize):
-    
-    return pi/gridsize
 
 # Numerical Values Cited From Hui L. et al
     
