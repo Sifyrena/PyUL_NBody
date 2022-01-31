@@ -5,5 +5,8 @@
 /Outputs
 /Archive
 /Private
+/Bench
+/Tests
 /2021April
 *.pyc
+*.icloud
