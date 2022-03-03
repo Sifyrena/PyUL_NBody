@@ -1,6 +1,6 @@
 Version   = str('PyUL') # Handle used in console.
-D_version = str('Build 2022 Feb 01') # Detailed Version
-S_version = 24.0 # Short Version
+D_version = str('Build 2022 Mar 03') # Detailed Version
+S_version = 25.21 # Short Version
 
 # Housekeeping
 import time
@@ -16,6 +16,8 @@ import numexpr as ne
 import numba
 import pyfftw
 
+from scipy.special import sph_harm as SPH 
+
 # Jupyter
 from IPython.core.display import clear_output
 
@@ -23,16 +25,16 @@ num_threads = multiprocessing.cpu_count()
 
 pi = np.pi
 
-eV = 1.783e-36 # kg*c^2
+eV = 1.78266191e-36 # kg*c^2
 
 # ULDM:
 
-#m22L = float(input())
 axion_E = float(input('Axion Mass (eV). Blank for 1e-22 eV') or 1e-22)
 
-#axion_E = 1e-22
 
-SSLength = 5
+################################## DIALOG BOX #################################
+
+SSLength = 6
 
 def printU(Message,SubSys = 'Sys'):
     print(f"{Version}.{SubSys.rjust(SSLength)}: {Message}")
@@ -4035,9 +4037,148 @@ def GalShift(psi,v):
     
 
     
-def MaxVel(gridsize):
+# Basis Decomposition Tools
+
+##########################################################
+
+def HighBasisInit_O(n,resol,mS, xarray, yarray, zarray):
     
-    return pi/gridsize
+    ## Assemble the Order to Load
+    
+    # Principal Quantum Number = n+1
+    
+    Name = f'./Soliton Profile Files/HFK/f_HFK_{n:02d}'
+    
+    DataName = Name + '.npy'
+    MDataName = Name + '_info.uldm'
+    
+    # Load data
+    f = np.load(DataName)
+    
+    # Load Metadata
+    config = json.load(open(MDataName))
+    
+    delta_x = config["Resolution"]
+    alpha = config["Alpha"]
+    beta = config["Beta"]
+    CutOff = config["Radial Cutoff"]
+    
+    alphaL = (mS / alpha) ** 2 # Scale!
+    
+    position = [0,0,0]
+    
+    funct = np.zeros([resol,resol,resol],dtype = 'complex128')
+    
+    return initsoliton_jit(funct, xarray, yarray, zarray, [0,0,0], alphaL, f, delta_x,CutOff)
+
+    
+    
+def NLMCompile(resol, mSC, xarray,yarray,zarray,max_n = 9, Scratch = True, OnlySym = False):
+    
+    time0 = time.time()
+    
+    printU("Init. spherical grid ...",'SpH')
+    LonArr, ColArr = SphBasic(resol)
+    printU("Init. spherical grid ... Done!",'SpH')
+    
+    bases = {}
+    printU('Prep. basis ...','SpH')
+        
+    print('-'*20)
+    for n in range(max_n):
+        
+        RadialFN = HighBasisInit_O(n,resol,mSC,xarray,yarray,zarray) 
+        
+        
+       
+        for l in range(n+1):
+            
+            if OnlySym:
+                mrange = 1
+                
+            else:
+                mrange = l+1
+            
+            for m in range(mrange):
+                
+                nlmString = f"{n+1}_{l}_{m}"
+                
+                Ylm = SPH(m,l,LonArr,ColArr)
+                
+                bases[nlmString] = np.conj(RadialFN*Ylm/np.abs(Ylm))
+                
+                print(nlmString,end = ',')
+                
+        print('')     
+        print('-'*20)
+                
+      
+    printU(f"Prep. basis ... Done! Time taken: {time.time()-time0:.4g} s",'SpH')
+            
+    return bases
+                
+                
+# New stuff 
+
+ 
+
+def SphBasic(resol):
+    
+    GSpace = np.linspace(-1,1,resol,endpoint=False)
+
+    xG,yG,zG = np.meshgrid(GSpace,GSpace,GSpace,indexing = 'ij')
+    
+    RArr = np.sqrt(xG**2+yG**2+zG**2) # R (Not Useful)
+    
+    LonArr =  np.arctan2(yG,xG) # THETA # Longitude
+    ColArr = np.arccos(zG/RArr)  # Colatitude
+
+    ColArr[np.isnan(ColArr)] = 0 # Filter off invalid values
+    
+    return LonArr, ColArr
+    
+
+    
+def ExpansionCoefficientPrep(psi,Basis,loc,ix,its_per_save):
+    
+    save_num = int((ix + 1) / its_per_save)
+        
+    Result = {}
+    
+    for key, value in Basis.items():
+        
+        Result[key] = (np.sum(psi*value))
+        
+        
+    with open(f"{loc}/Outputs/SPH_#{save_num:03d}.uldm", "w+") as outfile:
+        json.dump(Result, outfile,indent=4)
+    
+    
+
+
+def ExpansionCoefficient(psi,Basis):
+
+    Result = {}
+
+    
+    for key, value in Basis.items():
+        
+        InnerProd = ne.evaluate('value*psi')
+        
+        Result[key] = np.sum(InnerProd)
+        
+    return Result
+
+
+
+
+
+
+
+
+
+
+
 
 # Numerical Values Cited From Hui L. et al
     
