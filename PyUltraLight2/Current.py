@@ -1,6 +1,6 @@
 Version   = str('PyUL') # Handle used in console.
-D_version = str('Build 2022 Mar 03') # Detailed Version
-S_version = 25.21 # Short Version
+D_version = str('Build 2022 Jul 11') # Detailed Version
+S_version = 25.22 # Short Version
 
 # Housekeeping
 import time
@@ -836,7 +836,7 @@ def FWNBody(t,TMState,masslist,phiSP,a,lengthC,resol):
 
             GArY = (TAr[1:3,2:4,1:3] - TAr[1:3,0:2,1:3])/(2*GridDist) # 8
 
-            GArZ = (TAr[1:3,1:3,2:4] - TAr[1:3,1:3,2:4])/(2*GridDist) # 8
+            GArZ = (TAr[1:3,1:3,2:4] - TAr[1:3,1:3,0:2])/(2*GridDist) # 8
 
             GradientX = InterpolateLocal(RRem,GArX)
 
@@ -951,7 +951,7 @@ def FWNBody_NI(t,TMState,masslist,phiSP,a,lengthC,resol):
 
             GArY = (TAr[1:3,2:4,1:3] - TAr[1:3,0:2,1:3])/(2*GridDist) # 8
 
-            GArZ = (TAr[1:3,1:3,2:4] - TAr[1:3,1:3,2:4])/(2*GridDist) # 8
+            GArZ = (TAr[1:3,1:3,2:4] - TAr[1:3,1:3,0:2])/(2*GridDist) # 8
 
             GradientX = InterpolateLocal(RRem,GArX)
 
