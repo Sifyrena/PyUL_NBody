@@ -1,6 +1,6 @@
 Version   = str('PyUL') # Handle used in console.
-D_version = str('Build 2022 Jul 11') # Detailed Version
-S_version = 25.22 # Short Version
+D_version = str('Build 2022 Sep 20') # Detailed Version
+S_version = 25.24 # Short Version
 
 # Housekeeping
 import time
@@ -17,6 +17,9 @@ import numba
 import pyfftw
 
 from scipy.special import sph_harm as SPH 
+
+print("Importing h5py. If this functionality is not required, please comment out line #22 in the main program.")
+import h5py
 
 # Jupyter
 from IPython.core.display import clear_output
@@ -92,7 +95,7 @@ def IOSave(loc,Type,save_num,save_format = 'npy',data = []):
     elif save_format == 'npz':
         np.savez(file_name,data)
     elif save_format == 'hdf5':
-        import h5py
+        
         f = h5py.File(file_name, 'w')
         dset = f.create_dataset("init", data=data)
         f.close()
@@ -101,6 +104,13 @@ def IOSave(loc,Type,save_num,save_format = 'npy',data = []):
         
 def IOLoad_npy(loc,Type,save_num):
     return np.load(f"{loc}/Outputs/{IOName(Type)}_#{save_num:03d}.npy")
+
+def IOLoad_h5(loc,Type,save_num):
+    flname = f"{loc}/Outputs/{IOName(Type)}_#{save_num:03d}.hdf5"
+    f = h5py.File(flname,'r')
+    b = f['init'][:]
+    f.close()
+    return np.array(b)
 
 def CreateStream(loc, NS = 32, Target = 'Undefined', StreamChar = [0]):
     file = open(f'{loc}/NBStream.uldm', "w+")
@@ -2861,7 +2871,16 @@ def Load_Data(save_path,ts,save_options,save_number):
     return EndNum, data,  TMdata, phidata,    graddata, phasedata
 
 
-def Load_npys(loc,save_options, LowMem = False):
+def Load_npys(loc,save_options, LowMem = False, Extension = "npy"):
+    
+    
+    if Extension == "hdf5":
+        
+        Loader = IOLoad_h5
+        
+    else: 
+        Loader = IOLoad_npy
+    
     
     if save_options[0] or save_options[1] or save_options[6] or save_options[12] or save_options[15]: 
         printU('3D saves are not automatically loaded. Please load them manually.','IO')
@@ -2902,14 +2921,16 @@ def Load_npys(loc,save_options, LowMem = False):
         try:
             for Word in SaveWordList:
                 if (Word != 'Energy') and (Word != 'Entropy') and (Word != 'Momentum') and (Word != 'AngMomentum'): 
-                    Out[Word].append(IOLoad_npy(loc,Word,x))        
+                    Out[Word].append(Loader(loc,Word,x))        
             x += 1
         
         except FileNotFoundError:
             success = False
 
-    printU(f"Loaded {x} Data Entries from {loc}",'LoadNPY')
+    printU(f"Loaded {x} Data Entries from {loc}",'Loader')
     return x, Out
+
+
 
 
 def SmoothingReport(a,resol,clength, silent = True):
