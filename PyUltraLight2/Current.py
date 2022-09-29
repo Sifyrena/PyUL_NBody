@@ -1,6 +1,6 @@
 Version   = str('PyUL') # Handle used in console.
-D_version = str('Build 2022 Sep 20') # Detailed Version
-S_version = 25.24 # Short Version
+D_version = str('Build 2022 Sep 29') # Detailed Version
+S_version = 26 # Short Version
 
 # Housekeeping
 import time
@@ -37,10 +37,16 @@ axion_E = float(input('Axion Mass (eV). Blank for 1e-22 eV') or 1e-22)
 
 ################################## DIALOG BOX #################################
 
-SSLength = 6
+SSLength = 4
 
-def printU(Message,SubSys = 'Sys'):
-    print(f"{Version}.{SubSys.rjust(SSLength)}: {Message}")
+def printU(Message,SubSys = 'Sys',ToScreen = True, ToFile = False, FilePath = ''):
+
+    if ToScreen:
+        print(f"{Version}.{SubSys.rjust(SSLength)}: {Message}")
+        
+    if ToFile and FilePath != "":
+        with open(FilePath, "a+") as o:
+            o.write(f"{GenFromTime()} {Version}.{SubSys.rjust(SSLength)}: {Message}\n")
     
 printU(f"Axion Mass: {axion_E:.2g} eV.", 'Universe')
 
@@ -76,9 +82,9 @@ energy_unit = mass_unit * length_unit ** 2 / (time_unit**2)
 #####################################################################################
     
 ### Internal Flags used for IO
-SFS = '3Density 3Wfn 2Density Energy 1Density NBody 3Grav 2Grav DF 2Phase Entropy 1Grav 3GravF 2GravF 1GravF 3UMmt 2UMmt 1UMmt Momentum AngMomentum'
+SFS = '3Density 3Wfn 2Density Energy 1Density NBody 3Grav 2Grav DF 2Phase Entropy 1Grav 3GravF 2GravF 1GravF 3UMmt 2UMmt 1UMmt Momentum AngMomentum 3DensityRS 3WfnRS'
 
-SNM = 'R3D P3D R2D EGY R1D NTM G3D G2D DYF A2D ENT G1D F3D F2D F1D V3D V2D V1D PMT MVR'
+SNM = 'R3D P3D R2D EGY R1D NTM G3D G2D DYF A2D ENT G1D F3D F2D F1D V3D V2D V1D PMT MVR R3R P3R'
 
 SaveFlags = SFS.split()
 SaveNames = SNM.split()
@@ -86,9 +92,11 @@ SaveNames = SNM.split()
 def IOName(Type):
     return SaveNames[SaveFlags.index(Type)]
 
-def IOSave(loc,Type,save_num,save_format = 'npy',data = []):
+def IOSave(loc,Type,save_num,save_format = 'npy',data = [], Old = False):
     
-    file_name = f"{loc}/Outputs/{IOName(Type)}_#{save_num:03d}.{save_format}"
+    file_name = f"{loc}/Outputs/{Type}/{IOName(Type)}_#{save_num:03d}.{save_format}"
+    if Old:
+        file_name = f"{loc}/Outputs/{IOName(Type)}_#{save_num:03d}.{save_format}"
 
     if save_format == 'npy':
         np.save(file_name,data)
@@ -103,9 +111,19 @@ def IOSave(loc,Type,save_num,save_format = 'npy',data = []):
         raise RuntimeError('Invalid output format specified!')
         
 def IOLoad_npy(loc,Type,save_num):
-    return np.load(f"{loc}/Outputs/{IOName(Type)}_#{save_num:03d}.npy")
+    return np.load(f"{loc}/Outputs/{Type}/{IOName(Type)}_#{save_num:03d}.npy")
 
 def IOLoad_h5(loc,Type,save_num):
+    flname = f"{loc}/Outputs/{Type}/{IOName(Type)}_#{save_num:03d}.hdf5"
+    f = h5py.File(flname,'r')
+    b = f['init'][:]
+    f.close()
+    return np.array(b)
+    
+def IOLoad_npy_O(loc,Type,save_num):
+    return np.load(f"{loc}/Outputs/{IOName(Type)}_#{save_num:03d}.npy")
+
+def IOLoad_h5_O(loc,Type,save_num):
     flname = f"{loc}/Outputs/{IOName(Type)}_#{save_num:03d}.hdf5"
     f = h5py.File(flname,'r')
     b = f['init'][:]
@@ -197,6 +215,27 @@ def prog_bar(iteration_number = 100, progress = 1, tinterval = 0 ,status = '',ad
         status, 'Exp. Time: ',ETA,'Prev.: ',tinterval,adtl)
    
     print(f'{text}', end="",flush='true')
+    
+    
+def prog_bar_NG(iteration_number = 100, progress = 1, tinterval = 0 ,status = '',adtl = ''):
+        
+    if tinterval != 0:
+        ETAStamp = time.time() + (iteration_number - progress)*tinterval
+
+        ETA = datetime.fromtimestamp(ETAStamp).strftime("%d/%m/%Y, %H:%M:%S")
+    
+    else:
+        ETA = '-'
+        
+    PROG = float(progress) / float(iteration_number)
+    
+    if PROG >= 1.:
+        PROG, status = 1, ""
+    
+    text = f"{round(PROG * 100, 0)},{status}, Exp. Time: {ETA},'Prev.: ',{tinterval},{adtl}"
+   
+    printU(text,"")
+
 
 
 ####################### Credits Information
@@ -1796,13 +1835,13 @@ def ULRead(InitPath):
     
     return psi
 
-def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal = False, UseInit = False, IsoP = False, UseDispSponge = False, SelfGravity = True, NBodyInterp = True, NBodyGravity = True, Shift = False, Simpson = False, Silent = False, AutoStop = False, AutoStop2 = False,AutoStop3 = False, KEThreshold = 0.9, WellThreshold = 100, InitPath = '', InitWeight = 1, Message = '', Stream = False, StreamChar = [0]):
+def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal = False, UseInit = False, IsoP = False, UseDispSponge = False, SelfGravity = True, NBodyInterp = True, NBodyGravity = True, Shift = False, Simpson = False, Silent = False, AutoStop = False, AutoStop2 = False,AutoStop3 = False, KEThreshold = 0.9, WellThreshold = 100, InitPath = '', InitWeight = 1, Message = '', Stream = False, StreamChar = [0], GenerateLog = True, CenterCalc = False, NLM = False, Length_Ratio = 0.5, resolR = 64):
     
     if run_folder == "":
-        printU('Nothing done!','IO')
+        printU('Nothing done!','Evolve')
         return
     
-    clear_output()
+    # clear_output()
 
     Draft = True
 
@@ -1811,7 +1850,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     loc = './' + save_path + '/' + run_folder
         
     if UseInit and (InitPath == ''):
-        raise RuntimeError("Must supply initial wavefunction!")
+        raise RuntimeError("UseInit set to true. Must supply initial wavefunction!")
         
     try:
         os.mkdir(str(loc + '/Outputs'))
@@ -1838,10 +1877,10 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
             
         else:
             return
-
+            
+                   
     timestamp = run_folder
 
-    
     file = open('{}{}{}'.format('./', save_path, '/latest.uldm'), "w+")
     file.write(run_folder)
     file.close()
@@ -1884,6 +1923,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     "Depth Factor" : WellThreshold,
     })
     
+    LogLocation = f"./{save_path}/{run_folder}/evolve_{GenFromTime()}.log"
     
     PyULConfig["Misc. Settings"] = ({"Custom Soliton Draft Quallity": Draft})
     
@@ -1893,13 +1933,14 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     
     NS, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_format, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, embeds, Uniform,Density, density_unit,a, UVel = LoadConfig(loc)
 
-        
+    for SaveName in SaveOptionsCompile(save_options).split():
+        os.mkdir(str(loc + '/Outputs/'+SaveName))        
     num_threads = multiprocessing.cpu_count()
     
     if resol <= 100:
         num_threads = np.min([num_threads//2,8])
         
-    printU(f"Using {num_threads} CPU Threads for FFT.",'FFT')
+    printU(f"Using {num_threads} CPU Threads for FFT.",'FFT', ToFile= GenerateLog, FilePath= LogLocation)
     # External Credits Print
     PyULCredits(IsoP,UseDispSponge,embeds)
     # Embedded particles are Pre-compiled into the list.
@@ -1912,19 +1953,19 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         printU(f"Smoothing has been turned off!",'NBody')
         a = 0
     
-    printU(f"Loaded Parameters from {loc}",'IO')
-    printU(f"Data to save this run:\n{SaveOptionsCompile(save_options)}",'IO')
+    printU(f"Loaded Parameters from {loc}",'IO', ToFile= GenerateLog, FilePath= LogLocation)
+    printU(f"Data to save this run:\n{SaveOptionsCompile(save_options)}",'IO', ToFile= GenerateLog, FilePath= LogLocation)
 
     NumSol = len(solitons)
     NumTM = len(particles)
             
     if (Method == 3): # 1 = Real Space Interpolation (Orange), 2 = Fourier Sum (White)
-        printU(f"Using Linear Interpolation for gravity.",'NBody')
+        printU(f"Using Linear Interpolation for gravity.",'NBody', ToFile= GenerateLog, FilePath= LogLocation)
     
-    printU(f"Simulation grid resolution is {resol}^3.",'FFT')
+    printU(f"Simulation grid resolution is {resol}^3.",'FFT', ToFile= GenerateLog, FilePath= LogLocation)
     
     if a == 0:
-        printU(f"Using 1/r Point Mass Potential.",'NBody')
+        printU(f"Using 1/r Point Mass Potential.",'NBody', ToFile= GenerateLog, FilePath= LogLocation)
     
 
     if EdgeClear:
@@ -1933,7 +1974,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     print('==========================Additional Settings=================================')
 
     if NBodyGravity:
-        print(f"Particle gravity  ON.")    
+        print(f"Particle gravity  ON.") 
     else:
         print(f"Particle gravity OFF.")     
         
@@ -2028,7 +2069,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         if len(psiEx) != resol:
             raise ValueError('Loaded grid is not currently compatible with run settings!')
         print("======================================================")
-        printU(f"Loaded initial wavefunction from {InitPath}",'IO')
+        printU(f"Loaded initial wavefunction from {InitPath}",'IO', ToFile= GenerateLog, FilePath= LogLocation)
         
         MassCom = Density*lengthC**3
 
@@ -2037,7 +2078,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         DensityCom = MassCom / resol**3
 
         print('========================Dispersive Background====================================')
-        printU(f"Added a pre-generated wavefunction with pseudorandom phase.",'Init')
+        printU(f"Added a pre-generated wavefunction with pseudorandom phase.",'Init', ToFile= GenerateLog, FilePath= LogLocation)
         
     # INITIALISE SOLITONS WITH SPECIFIED MASS, POSITION, VELOCITY, PHASE
 
@@ -2051,7 +2092,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     
     if Stream:
         CreateStream(loc, NS, VTot,StreamChar)
-        printU("Created stream file at root folder for variables {StreamChar}.",'NBody')
+        printU("Created stream file at root folder for variables {StreamChar}.",'NBody', ToFile= GenerateLog, FilePath= LogLocation)
 
     if AutoStop and NumTM == 1:
         ThresholdVelocity = -1*UVelocity[1]
@@ -2062,9 +2103,9 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     
     if Uniform:
         print('========================Uniform Background====================================')
-        printU(f"Added a uniform wavefunction with no phase.",'Init')
-        printU(f"Background ULDM mass in domain is {MassCom:.4f}, at {Density:.4f} per grid.",'Init')
-        printU(f"Background Global velocity is (x,y,z): {UVel[1]},{UVel[0]},{UVel[2]}.",'Init')
+        printU(f"Added a uniform wavefunction with no phase.",'Init', ToFile= GenerateLog, FilePath= LogLocation)
+        printU(f"Background ULDM mass in domain is {MassCom:.4f}, at {Density:.4f} per grid.",'Init', ToFile= GenerateLog, FilePath= LogLocation)
+        printU(f"Background Global velocity is (x,y,z): {UVel[1]},{UVel[0]},{UVel[2]}.",'Init', ToFile= GenerateLog, FilePath= LogLocation)
         print('==============================================================================')
     psi = ne.evaluate("0*psi + sqrt(Density)")
 
@@ -2084,11 +2125,11 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
             delta_xL, prealphaL, betaL,CutOff = LoadSolitonConfig(RatioBU)
         except RuntimeError:
             print('==============================================================================')
-            printU(f'Note that this process will not be required for repeated runs. To remove custom profiles, go to the folder /Soliton Profile Files/Custom.', 'Profiler')
-            print(f'Generating profile for Soliton with MBH/MSoliton = {RatioBU:.4f}, Part 1')
+            printU(f'Note that this process will not be required for repeated runs. To remove custom profiles, go to the folder /Soliton Profile Files/Custom.', 'Profiler', ToFile= GenerateLog, FilePath= LogLocation)
+            print(f'Generating profile for Soliton with MBH/MSoliton = {RatioBU:.4f}, Part 1', ToFile= GenerateLog, FilePath= LogLocation)
             GMin,GMax = BHGuess(RatioBU)
             s, BHMass = BHRatioTester(RatioBU,30,1e-6,GMin,GMax,a)
-            print(f'Generating profile for Soliton with MBH/MSoliton = {RatioBU:.4f}, Part 2')
+            print(f'Generating profile for Soliton with MBH/MSoliton = {RatioBU:.4f}, Part 2', ToFile= GenerateLog, FilePath= LogLocation)
             SolitonProfile(BHMass,s,a,not Draft)
         print('==============================================================================')
 
@@ -2097,7 +2138,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         # L stands for Local, as in it's only used once.
         fL = LoadSoliton(RatioBU)
 
-        printU(f"Loaded embedded soliton {EI} with BH-Soliton mass ratio {RatioBU:.4f}.", 'Init')
+        printU(f"Loaded embedded soliton {EI} with BH-Soliton mass ratio {RatioBU:.4f}.", 'Init', ToFile= GenerateLog, FilePath= LogLocation)
 
         mass = convert(emb[0], s_mass_unit, 'm')*(1-Ratio)
         position = convert(np.array(emb[1]), s_position_unit, 'l')
@@ -2123,7 +2164,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         EI += 1 # For displaying.
 
     if solitons != []:
-        printU(f"Loaded unperturbed soliton.",'Init')
+        printU(f"Loaded standard soliton radial profile.",'Init', ToFile= GenerateLog, FilePath= LogLocation)
         f = LoadDefaultSoliton()
 
     for s in solitons:
@@ -2158,19 +2199,14 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     
     ifft_funct = pyfftw.builders.ifftn(funct, axes=(0, 1, 2), threads=num_threads)       
     
-    # Experimental Zero Ridder!
-    #if not Uniform:
-    #    print(f"{Version} SP: Peforming an Additional FFT Step to Get rid of zeroes.")
-    #    psi = ifft_funct(fft_psi(psi)) # New FFT Step 
-
-    # Density = 0
-    
-    # Initial Wavefunction Now In Memory
-    
-
     rho = ne.evaluate("abs(abs(psi)**2)")
         
     rho = rho.real
+    
+    if CenterCalc:
+        LocCOM = Find3BoxCOM(rho,xarray, yarray, zarray)
+        printU(LocCOM, "COM", ToScreen = False, ToFile= GenerateLog, FilePath= LogLocation) 
+        Resample3Box(psi, LocCOM, gridvec, loc, 0, save_format, Length_Ratio, resolR, Save_Rho = save_options[20], Save_Psi = save_options[21])
     ##########################################################################################
     # COMPUTE SIZE OF TIMESTEP (CAN BE INCREASED WITH step_factor)
 
@@ -2206,11 +2242,11 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         pOut,LOut = Lp_jit(psi,rho,funct,resol,gridvec,Kx,Ky,Kz,ifft_funct)
         
         if save_options[18]:
-            printU('Saving ULDM momentum.','Momentum')
+            printU('Saving ULDM momentum.','Momentum', ToFile= GenerateLog, FilePath= LogLocation)
             IOSave(loc,'Momentum',momentum_I,save_format = 'npy',data = pOut)
 
         if save_options[19]:
-            printU('Saving ULDM angular momentum with respect to origin.','Momentum')
+            printU('Saving ULDM angular momentum with respect to origin.','Momentum', ToFile= GenerateLog, FilePath= LogLocation)
             IOSave(loc,'AngMomentum',momentum_I,save_format = 'npy',data = LOut)
         
 
@@ -2279,19 +2315,19 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     if IsoP:
         try:
             green = np.load(f'./Green Functions/G{resol}.npy')
-            printU(f"Using pre-computed Green function for simulation region.",'SP')
+            printU(f"Using pre-computed Green function for simulation region.",'SP', ToFile= GenerateLog, FilePath= LogLocation)
         except FileNotFoundError:
             if not os.path.exists('./Green Functions/'):
                 os.mkdir('./Green Functions/')
             green = makeDCTGreen(resol) #make Green's function ONCE
-            printU(f"Generating Green function for simulation region.",'SP')
+            printU(f"Generating Green function for simulation region.",'SP', ToFile= GenerateLog, FilePath= LogLocation)
             np.save(f'./Green Functions/G{resol}.npy',green)
             
         #green = makeEvenArray(green)
         phiSP = IP_jit(rho, green, lengthC, fft_X, ifft_X, fft_plane, ifft_plane)
         
     else:
-        printU(f"Poisson Equation Solveed Using FFT.",'SP')
+        printU(f"Poisson Equation Solveed Using FFT.",'SP', ToFile= GenerateLog, FilePath= LogLocation)
         phiSP = irfft_phi(phik)
         
     ##########################################################################################
@@ -2306,11 +2342,11 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         position = convert(np.array(particle[1]), m_position_unit, 'l')
         
         if mT == 0:
-            printU(f"Particle #{MI} loaded as observer.",'NBody')
+            printU(f"Particle #{MI} loaded as observer.",'NBody', ToFile= GenerateLog, FilePath= LogLocation)
         else:
             
             DensityInit = QuickInterpolate(rho,lengthC,resol,position)
-            printU(f"Particle #{MI} mass {mT:.5f} and local density {DensityInit:.5f} (code units).",'NBody')
+            printU(f"Particle #{MI} mass {mT:.5f} and local density {DensityInit:.5f} (code units).",'NBody', ToFile= GenerateLog, FilePath= LogLocation)
             NBDensity(loc,DensityInit)
 
         
@@ -2407,13 +2443,13 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         raise RuntimeError("Something is seriously wrong.")
     
     if DumpInit:
-        printU(f'Successfully initiated Wavefunction and NBody Initial Conditions. Dumping to file.','IO')
+        printU(f'Successfully initiated Wavefunction and NBody Initial Conditions. Dumping to file.','IO', ToFile= GenerateLog, FilePath= LogLocation)
     
         ULDump(loc,psi,TMState,'Init')
         
     
     else:
-        printU(f'Successfully initiated Wavefunction and NBody Initial Conditions.', 'Init')
+        printU(f'Successfully initiated Wavefunction and NBody Initial Conditions.', 'Init', ToFile= GenerateLog, FilePath= LogLocation)
 
     ##########################################################################################
     # PRE-LOOP SAVE I.E. INITIAL CONFIG
@@ -2450,24 +2486,24 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         #High Performance Mask
         PreMult[distarray<=rp] = 0
         
-        printU(f'Dispersive Sponge Condition Pre Multiplier Ready.','SP')
+        printU(f'Dispersive Sponge Condition Pre Multiplier Ready.','SP', ToFile= GenerateLog, FilePath= LogLocation)
     ##########################################################################################
     # LOOP NOW BEGINS
     if Silent:
         clear_output()
         print(f"{D_version}\nMessage: {Message}")
         
-    printU(f"Simulation name is {loc}",'Runtime')
-    printU(f"{resol} Resolution for {duration:.4g}{duration_units}",'Runtime')
-    printU(f"Simulation Started at {tBeginDisp}.",'Runtime')
+    printU(f"Simulation name is {loc}",'Runtime', ToFile= GenerateLog, FilePath= LogLocation)
+    printU(f"{resol} Resolution for {duration:.4g}{duration_units}",'Runtime', ToFile= GenerateLog, FilePath= LogLocation)
+    printU(f"Simulation Started at {tBeginDisp}.",'Runtime', ToFile= GenerateLog, FilePath= LogLocation)
             
     HaSt = 1  # 1 for a half step 0 for a full step
 
     tenth = float(save_number/10) #This parameter is used if energy outputs are saved while code is running.
     if actual_num_steps == save_number:
-        printU(f"Taking {int(actual_num_steps)} ULDM steps", 'Runtime')
+        printU(f"Taking {int(actual_num_steps)} ULDM steps", 'Runtime', ToFile= GenerateLog, FilePath= LogLocation)
     else:
-        printU(f"Taking {int(actual_num_steps)} ULDM steps @ {save_number} snapshots", 'Runtime')
+        printU(f"Taking {int(actual_num_steps)} ULDM steps @ {save_number} snapshots", 'Runtime', ToFile= GenerateLog, FilePath= LogLocation)
     
     if warn == 1:
         print("WARNING: Detected significant overlap between solitons in I.V.")
@@ -2517,6 +2553,12 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         
 
         rho = ne.evaluate("abs(abs(psi)**2)").real
+        
+        if CenterCalc:
+            LocCOM = Find3BoxCOM(rho,xarray, yarray, zarray)
+            printU(LocCOM, "COM", ToScreen = False, ToFile= GenerateLog, FilePath= LogLocation)
+            
+            
 
         phik = rfft_rho(rho)  # not actually phik but phik is defined in next line
             
@@ -2597,6 +2639,10 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
             egpcmMlist.append(EGPCM)
             EGPCM = 0
             
+            if CenterCalc:
+                
+                Resample3Box(psi, LocCOM, gridvec, loc, int((ix + 1) / its_per_save), save_format, Length_Ratio, resolR, Save_Rho = save_options[20], Save_Psi = save_options[21])
+            
             save_grid(
                 rho, psi, resol, 
                 TMState, phiSP, phi, GradientLog,
@@ -2643,7 +2689,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         if AutoStop2:
             if np.min(phi) < phiRef:
                 print('\n')
-                printU('Gravitational field runaway threshold reached!','Consistency')
+                printU('Gravitational field runaway threshold reached!','Consistency', ToFile= GenerateLog, FilePath= LogLocation)
                 print(f'\nSimulation Concluded at step {ix}!')
                 break
                 
@@ -2670,9 +2716,9 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
     Time %= 60
     seconds = Time
     print('\n')
-    printU(f"Run Complete. Time Elapsed (d:h:m:s): {day:.0f}:{hour:.0f}:{minutes:.0f}:{seconds:.2f}",'Runtime')
+    printU(f"Run Complete. Time Elapsed (d:h:m:s): {day:.0f}:{hour:.0f}:{minutes:.0f}:{seconds:.2f}",'Runtime', ToFile= GenerateLog, FilePath= LogLocation)
     if DumpFinal:
-        printU(f'Dumped final state to file.','IO')
+        printU(f'Dumped final state to file.','IO', ToFile= GenerateLog, FilePath= LogLocation)
         ULDump(loc,psi,TMState,'Final')
         
     if AutoStop and not TimeWritten:
@@ -2871,23 +2917,26 @@ def Load_Data(save_path,ts,save_options,save_number):
     return EndNum, data,  TMdata, phidata,    graddata, phasedata
 
 
-def Load_npys(loc,save_options, LowMem = False, Extension = "npy"):
-    
+def Load_npys(loc,save_options, LowMem = False, Extension = "npy", Old = False):
     
     if Extension == "hdf5":
-        
         Loader = IOLoad_h5
-        
     else: 
         Loader = IOLoad_npy
     
-    
-    if save_options[0] or save_options[1] or save_options[6] or save_options[12] or save_options[15]: 
-        printU('3D saves are not automatically loaded. Please load them manually.','IO')
-        save_options[0] = False
-        save_options[1] = False
-        save_options[6] = False
-        save_options[12] = False
+    if Old:
+        if Extension == "hdf5":
+            Loader = IOLoad_h5_O
+        else: 
+            Loader = IOLoad_npy_O
+
+    printU('3D saves are not automatically loaded. Please load them manually.','IO')
+    save_options[0] = False
+    save_options[1] = False
+    save_options[6] = False
+    save_options[12] = False
+    save_options[20] = False
+    save_options[21] = False
     
     if LowMem:
         printU('Skipping 2D data. Please load them manually.','IO')
@@ -2895,13 +2944,13 @@ def Load_npys(loc,save_options, LowMem = False, Extension = "npy"):
         save_options[7] = False
         save_options[13] = False
     
-    
     SaveWordList = SaveOptionsCompile(save_options).split()
     
     Out = {}
     
-    Out['Directory'] = loc
+    print(SaveWordList)
     
+    Out['Directory'] = loc
     
     for Word in SaveWordList:
         if (Word != 'Energy') and (Word != 'Entropy'): 
@@ -2910,9 +2959,6 @@ def Load_npys(loc,save_options, LowMem = False, Extension = "npy"):
     import time   
     import warnings 
     warnings.filterwarnings("ignore")
-
-    EndNum = 0
-    
     x = 0
     success = True
 
@@ -2924,10 +2970,11 @@ def Load_npys(loc,save_options, LowMem = False, Extension = "npy"):
                     Out[Word].append(Loader(loc,Word,x))        
             x += 1
         
-        except FileNotFoundError:
+        except:
             success = False
 
     printU(f"Loaded {x} Data Entries from {loc}",'Loader')
+    
     return x, Out
 
 
@@ -4191,67 +4238,40 @@ def ExpansionCoefficient(psi,Basis):
     return Result
 
 
-
-
-
-
-
-
-
-
-
-
-# Numerical Values Cited From Hui L. et al
+def Find3BoxCOM(rho,xGrid, yGrid, zGrid):
+    COM = np.array([np.sum(xGrid * rho),np.sum(yGrid * rho),np.sum(zGrid * rho)])/np.sum(rho)
+    return COM
     
-rho0 = 0.00440
-phi0 = 0.3155
-f0 = 3.9251
-epi0 = 0.16277
-w0 = 0.10851
+def Resample3Box(psi, COM, XAR, loc, save_num, save_format, Length_Ratio = 0.5, resolR = 192, Save_Rho = False, Save_Psi = False):
     
-class Soliton_Ground:
-   
-    def __init__(self, statevec = [], M_unit = '', M = 1, position = [0,0,0], velocity = [0,0,0], phase = 0):      
+    from scipy.interpolate import RegularGridInterpolator as RPI
+    # Note that phase correction is not performed in this version.
+    
+    lengthCR = -2 * XAR[0] * Length_Ratio
+
+    GVR = np.linspace(-lengthCR/2, lengthCR/2, int(resolR), endpoint = False)
         
-        if statevec != []:
-            if len(statevec) == 4:
-                M = statevec[0]
-                position = statevec[1]
-                velocity = statevec[2]
-                phase = statevec[3]
-            else:
-                raise RuntimeError("State vector supplied is broken.")
+    Real_I = RPI((XAR,XAR,XAR),np.real(psi),method='linear',bounds_error = False, fill_value = 0)
+    Imag_I = RPI((XAR,XAR,XAR),np.imag(psi),method='linear',bounds_error = False, fill_value = 0)
+    
+    NewGrid = np.meshgrid(
+        GVR + COM[0], GVR + COM[1], GVR + COM[2],
+        sparse=False, indexing='ij')
+
+    NewGrid_List = np.reshape(NewGrid, (3, -1), order='C').T
+
+    IReal = Real_I(NewGrid_List)
+    IImag = Imag_I(NewGrid_List)
+
+    IPsi = ne.evaluate("IReal + 1j*IImag")
+
+    PsiNew = np.reshape(IPsi,(resolR,resolR,resolR))
+    
+    if Save_Psi:
+        IOSave(loc,'3WfnRS',save_num,save_format,PsiNew)
+    
+    if Save_Rho:
+        RhoNew = ne.evaluate("conj(PsiNew)*PsiNew").real
         
-        
-        self.M = convert_between(M,M_unit,'kg','m')
-        self.pos = position
-        self.vel = velocity
-        self.phase = phase
-        self.ma = axion_mass
-    
-    def CoreDensity(self, unit = ''):
-        M = self.M
-        ma = self.ma
-        value = (G*ma**2/hbar**2)**3 * M**4 * rho0
-        return convert_between(value,'kg/m3',unit,'d')
-
-    def CoreField(self, unit = ''):
-        M = self.M
-        ma = self.ma
-        value = -1*(G*M*ma/hbar)**2 * phi0
-        return convert_between(value,'m/s2',unit,'a')
-
-    def rHWHM(self, unit = ''):
-        M = self.M
-        ma = self.ma
-        value = hbar**2/(G*M*ma**2)*f0
-        return convert_between(value,'m',unit,'l')
-
-    def VirialV(self, unit = ''):
-        M = self.M
-        ma = self.ma
-        value = G*M*ma/hbar * w0 **(1/2)
-        return convert_between(value,'m/s',unit,'v')
-    
-    
+        IOSave(loc,'3DensityRS',save_num,save_format,RhoNew)
     
