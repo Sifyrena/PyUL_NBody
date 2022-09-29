@@ -2907,7 +2907,7 @@ def Load_Data(save_path,ts,save_options,save_number):
             
             EndNum += 1
         
-        except FileNotFoundError:
+        except:
 
             print("WARNING: Run incomplete or the storage is corrupt!")
 
