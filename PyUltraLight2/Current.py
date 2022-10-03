@@ -2639,7 +2639,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
             egpcmMlist.append(EGPCM)
             EGPCM = 0
             
-            if CenterCalc:
+            if CenterCalc or save_options[20] or save_options[21]:
                 
                 Resample3Box(psi, LocCOM, gridvec, loc, int((ix + 1) / its_per_save), save_format, Length_Ratio, resolR, Save_Rho = save_options[20], Save_Psi = save_options[21])
             
