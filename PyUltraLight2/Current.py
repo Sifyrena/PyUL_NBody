@@ -1,6 +1,6 @@
 Version   = str('PyUL') # Handle used in console.
-D_version = str('Build 2022 Sep 29') # Detailed Version
-S_version = 26 # Short Version
+D_version = str('Build 2022 Nov 03') # Detailed Version
+S_version = 26.1 # Short Version
 
 # Housekeeping
 import time
@@ -591,6 +591,29 @@ def overlap_check(candidate, soliton):
 
 
 ############################FUNCTION TO PUT SPHERICAL SOLITON DENSITY PROFILE INTO 3D BOX (Uses pre-computed array)
+
+from scipy.interpolate import CubicSpline as CS
+
+def Init_Soliton(gridVec, position, resol, alpha, delta_x=0.00001):
+
+    xAr, yAr, zAr = np.meshgrid(gridVec - position[0],
+                                gridVec - position[1],
+                                gridVec - position[2],
+                                sparse=True,
+                                indexing="ij")
+
+    # gridSize = gridVec[1] - gridVec[0]
+    
+    DistArr = ne.evaluate("sqrt(xAr**2+yAr**2+zAr**2)")
+
+    f = alpha * LoadDefaultSoliton()
+    fR = np.arange(len(f)) * delta_x / np.sqrt(alpha)
+
+    fInterp = CS(fR, f, bc_type=("clamped", "not-a-knot"))
+
+    DistArrPts = DistArr.reshape(resol**3)
+
+    return fInterp(DistArrPts).reshape(resol, resol, resol)
 
 def initsoliton(funct, xarray, yarray, zarray, position, alpha, f, delta_x,Cutoff = 5.6):
     funct*= 0
@@ -2175,7 +2198,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         alpha = (mass / 3.883) ** 2
         beta = 2.454
         phase = s[3]
-        funct = initsoliton_jit(funct, xarray, yarray, zarray, position, alpha, f, delta_x)
+        funct = Init_Soliton(gridvec, position, resol, alpha)
         ####### Impart velocity to solitons in Galilean invariant way
         velx = velocity[0]
         vely = velocity[1]
