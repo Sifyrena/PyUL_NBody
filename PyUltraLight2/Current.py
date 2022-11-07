@@ -1,6 +1,6 @@
 Version   = str('PyUL') # Handle used in console.
-D_version = str('Build 2022 Nov 03') # Detailed Version
-S_version = 26.1 # Short Version
+D_version = str('Build 2022 November 7 Public') # Detailed Version
+S_version = 26.12 # Short Version
 
 # Housekeeping
 import time
@@ -16,6 +16,7 @@ import numexpr as ne
 import numba
 import pyfftw
 
+from scipy.interpolate import CubicSpline as CS 
 from scipy.special import sph_harm as SPH 
 
 print("Importing h5py. If this functionality is not required, please comment out line #22 in the main program.")
@@ -82,9 +83,9 @@ energy_unit = mass_unit * length_unit ** 2 / (time_unit**2)
 #####################################################################################
     
 ### Internal Flags used for IO
-SFS = '3Density 3Wfn 2Density Energy 1Density NBody 3Grav 2Grav DF 2Phase Entropy 1Grav 3GravF 2GravF 1GravF 3UMmt 2UMmt 1UMmt Momentum AngMomentum 3DensityRS 3WfnRS'
+SFS = '3Density 3Wfn 2Density Energy 1Density NBody 3Grav 2Grav DF 2Phase Entropy 1Grav 3GravF 2GravF 1GravF 3UMmt 2UMmt 1UMmt Momentum AngMomentum 3DensityRS 3WfnRS 2EnergyTot 2EnergyKQ 2EnergySI'
 
-SNM = 'R3D P3D R2D EGY R1D NTM G3D G2D DYF A2D ENT G1D F3D F2D F1D V3D V2D V1D PMT MVR R3R P3R'
+SNM = 'R3D P3D R2D EGY R1D NTM G3D G2D DYF A2D ENT G1D F3D F2D F1D V3D V2D V1D PMT MVR R3R P3R E2T E2K E2G'
 
 SaveFlags = SFS.split()
 SaveNames = SNM.split()
@@ -592,9 +593,8 @@ def overlap_check(candidate, soliton):
 
 ############################FUNCTION TO PUT SPHERICAL SOLITON DENSITY PROFILE INTO 3D BOX (Uses pre-computed array)
 
-from scipy.interpolate import CubicSpline as CS
 
-def Init_Soliton(gridVec, position, resol, alpha, delta_x=0.00001):
+def InitSolitonF(gridVec, position, resol, alpha, delta_x=0.00001, DR = 1):
 
     xAr, yAr, zAr = np.meshgrid(gridVec - position[0],
                                 gridVec - position[1],
@@ -602,9 +602,8 @@ def Init_Soliton(gridVec, position, resol, alpha, delta_x=0.00001):
                                 sparse=True,
                                 indexing="ij")
 
-    # gridSize = gridVec[1] - gridVec[0]
-    
-    DistArr = ne.evaluate("sqrt(xAr**2+yAr**2+zAr**2)")
+    gridSize = gridVec[1] - gridVec[0]
+    DistArr = ne.evaluate("sqrt(xAr**2+yAr**2+zAr**2 * DR)")
 
     f = alpha * LoadDefaultSoliton()
     fR = np.arange(len(f)) * delta_x / np.sqrt(alpha)
@@ -615,8 +614,10 @@ def Init_Soliton(gridVec, position, resol, alpha, delta_x=0.00001):
 
     return fInterp(DistArrPts).reshape(resol, resol, resol)
 
-def initsoliton(funct, xarray, yarray, zarray, position, alpha, f, delta_x,Cutoff = 5.6):
-    funct*= 0
+
+def initsoliton(funct, xarray, yarray, zarray, position, alpha, f, delta_x,Cutoff = 9, DR = 1):
+    
+    funct *= 0
     
     for index in np.ndindex(funct.shape):
         
@@ -625,8 +626,8 @@ def initsoliton(funct, xarray, yarray, zarray, position, alpha, f, delta_x,Cutof
         distfromcentre = (
             (xarray[index[0], 0, 0] - position[0]) ** 2 +
             (yarray[0, index[1], 0] - position[1]) ** 2 +
-            (zarray[0, 0, index[2]] - position[2]) ** 2 ) ** 0.5
-        # Utilises soliton profile array out to dimensionless radius 5.6.
+            (zarray[0, 0, index[2]] - position[2]) ** 2 ) ** 0.5 * DR
+        # Utilises soliton profile array out to dimensionless radius.
         if (np.sqrt(alpha) * distfromcentre <= Cutoff):
          
             funct[index] = alpha * f[int(np.sqrt(alpha) * (distfromcentre / delta_x + 1))]
@@ -636,7 +637,7 @@ def initsoliton(funct, xarray, yarray, zarray, position, alpha, f, delta_x,Cutof
 
 ############################FUNCTION TO PUT SPHERICAL SOLITON DENSITY PROFILE INTO 3D BOX (Uses pre-computed array)
 
-def initsolitonRadial(line, alpha, f, delta_x,Cutoff = 5.6):
+def initsolitonRadial(line, alpha, f, delta_x,Cutoff = 9):
     funct = 0*line
     
     for index in np.ndindex(funct.shape):
@@ -731,7 +732,7 @@ def save_grid(
         
 # CALCULATE_ENERGIES, NEW VERSION IN 2.16
             
-def calculate_energies(rho, Vcell, phiSP,phiTM, psi, karray2, fft_psi, ifft_funct, Density,Uniform, egpcmlist, egpsilist, ekandqlist, egylist, mtotlist):
+def calculate_energies(rho, Vcell, phiSP,phiTM, psi, karray2, fft_psi, ifft_funct, Density,Uniform, egpcmlist, egpsilist, ekandqlist, egylist, mtotlist, resol, save_grid_E = False):
 
     rho = rho.real
     
@@ -771,6 +772,11 @@ def calculate_energies(rho, Vcell, phiSP,phiTM, psi, karray2, fft_psi, ifft_func
     Mtot = np.sum(rho)*Vcell
     mtotlist.append(Mtot)
 
+    if save_grid_E:
+        EGrid = ne.evaluate("ETM + ESI + EKQ")[:,:,resol//2]
+        return EGrid, EKQ[:,:,resol//2], ESI[:,:,resol//2]
+    else:
+        return [], [], []
 ### Toroid or something
         
 def Wrap(TMx, TMy, TMz, lengthC):
@@ -1531,7 +1537,7 @@ def SolitonProfile(BHMass,s,Smoo,Production):
     #Note that the spatial resolution of the profile must match the specification of delta_x in the main code.
     if Production:
         dr = .00001
-        max_radius = 15
+        max_radius = 9
         tolerance = 1e-9 # how close f(r) must be to 0 at r_max; can be changed
         
     else:
@@ -1858,7 +1864,7 @@ def ULRead(InitPath):
     
     return psi
 
-def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal = False, UseInit = False, IsoP = False, UseDispSponge = False, SelfGravity = True, NBodyInterp = True, NBodyGravity = True, Shift = False, Simpson = False, Silent = False, AutoStop = False, AutoStop2 = False,AutoStop3 = False, KEThreshold = 0.9, WellThreshold = 100, InitPath = '', InitWeight = 1, Message = '', Stream = False, StreamChar = [0], GenerateLog = True, CenterCalc = False, NLM = False, Length_Ratio = 0.5, resolR = 64):
+def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal = False, UseInit = False, IsoP = False, UseDispSponge = False, SelfGravity = True, NBodyInterp = True, NBodyGravity = True, Shift = False, Simpson = False, Silent = False, AutoStop = False, AutoStop2 = False,AutoStop3 = False, KEThreshold = 0.9, WellThreshold = 100, InitPath = '', InitWeight = 1, Message = '', Stream = False, StreamChar = [0], GenerateLog = True, CenterCalc = False, NLM = False, Length_Ratio = 0.5, resolR = 64, PrintEK = True, DR = 1):
     
     if run_folder == "":
         printU('Nothing done!','Evolve')
@@ -2195,10 +2201,16 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         position = convert(np.array(s[1]), s_position_unit, 'l')
         velocity = convert(np.array(s[2]), s_velocity_unit, 'v')
         # Note that alpha and beta parameters are computed when the initial_f.npy soliton profile file is generated.
-        alpha = (mass / 3.883) ** 2
-        beta = 2.454
+        alpha = (mass / 3.8827652755822006) ** 2 #3.883
+        #alpha = (mass / 3.883) ** 2 #3.883
+        beta = 2.4538872760773143 #2.454
+        #beta = 2.454 #2.454
         phase = s[3]
-        funct = Init_Soliton(gridvec, position, resol, alpha)
+        
+        funct = InitSolitonF(gridvec, position, resol, alpha, DR = DR)
+        # funct = initsoliton_jit(funct, xarray, yarray, zarray, position, alpha, f, delta_x, DR = DR)
+        
+        printU(f"Using scale {DR}","Scaler")
         ####### Impart velocity to solitons in Galilean invariant way
         velx = velocity[0]
         vely = velocity[1]
@@ -2450,9 +2462,21 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         ekandqlist = []
         mtotlist = []
         egpcmMlist = [EGPCM]
+        
+        
 
-        calculate_energies(rho, Vcell, phiSP,phiTM, psi, karray2, fft_psi, ifft_funct, Density,Uniform, egpcmlist, egpsilist, ekandqlist, egylist, mtotlist)
+        ETotP, EKQP, ESIP = calculate_energies(rho, Vcell, phiSP,phiTM, psi, karray2, fft_psi, ifft_funct, Density,Uniform, egpcmlist, egpsilist, ekandqlist, egylist, mtotlist, resol, (save_options[22] or save_options[23] or save_options[24]))
     
+        if save_options[22]:
+            IOSave(loc,'2EnergyTot',0,save_format,ETotP)
+            
+        if save_options[23]:   
+            IOSave(loc,'2EnergyKQ',0,save_format,EKQP)
+        
+        if save_options[24]:
+            IOSave(loc,'2EnergySI',0,save_format,ESIP)
+
+
     GradientLog = np.zeros(NumTM*3)
 
     if save_options[10]:
@@ -2653,7 +2677,17 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
             prog_bar(actual_num_steps, ix + 1, tint,'IO',PBEDisp)
             #Next block calculates the energies at each save, not at each timestep.
             if (save_options[3]):
-                calculate_energies(rho, Vcell, phiSP,phiTM, psi, karray2, fft_psi, ifft_funct, Density,Uniform, egpcmlist, egpsilist, ekandqlist, egylist, mtotlist)
+    
+                ETotP, EKQP, ESIP = calculate_energies(rho, Vcell, phiSP,phiTM, psi, karray2, fft_psi, ifft_funct, Density,Uniform, egpcmlist, egpsilist, ekandqlist, egylist, mtotlist, resol, (save_options[22] or save_options[23] or save_options[24]))
+
+                if save_options[22]:
+                    IOSave(loc,'2EnergyTot',0,save_format,ETotP)
+
+                if save_options[23]:   
+                    IOSave(loc,'2EnergyKQ',0,save_format,EKQP)
+
+                if save_options[24]:
+                    IOSave(loc,'2EnergySI',0,save_format,ESIP)
            
 ################################################################################
 # SAVE DESIRED OUTPUTS
@@ -2662,8 +2696,7 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
             egpcmMlist.append(EGPCM)
             EGPCM = 0
             
-            if CenterCalc or save_options[20] or save_options[21]:
-                
+            if CenterCalc:
                 Resample3Box(psi, LocCOM, gridvec, loc, int((ix + 1) / its_per_save), save_format, Length_Ratio, resolR, Save_Rho = save_options[20], Save_Psi = save_options[21])
             
             save_grid(
@@ -2684,6 +2717,9 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
                 np.save(os.path.join(os.path.expanduser(loc), "Outputs/egpsilist.npy"), egpsilist)
                 np.save(os.path.join(os.path.expanduser(loc), "Outputs/ekandqlist.npy"), ekandqlist)
                 np.save(os.path.join(os.path.expanduser(loc), "Outputs/masseslist.npy"), mtotlist)
+                
+                if PrintEK:
+                    PBEDisp = f"Delta Ek (code units): {ekandqlist[-1]-ekandqlist[-2]:.6g}"
          
             if save_options[10]:
                 EntropyLog.append(-1*np.sum(ne.evaluate('rho*log(rho)')))
@@ -2930,7 +2966,7 @@ def Load_Data(save_path,ts,save_options,save_number):
             
             EndNum += 1
         
-        except:
+        except FileNotFoundError:
 
             print("WARNING: Run incomplete or the storage is corrupt!")
 
