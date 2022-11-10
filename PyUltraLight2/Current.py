@@ -2681,13 +2681,13 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
                 ETotP, EKQP, ESIP = calculate_energies(rho, Vcell, phiSP,phiTM, psi, karray2, fft_psi, ifft_funct, Density,Uniform, egpcmlist, egpsilist, ekandqlist, egylist, mtotlist, resol, (save_options[22] or save_options[23] or save_options[24]))
 
                 if save_options[22]:
-                    IOSave(loc,'2EnergyTot',0,save_format,ETotP)
+                    IOSave(loc,'2EnergyTot',(ix + 1) % its_per_save,save_format,ETotP)
 
                 if save_options[23]:   
-                    IOSave(loc,'2EnergyKQ',0,save_format,EKQP)
+                    IOSave(loc,'2EnergyKQ',(ix + 1) % its_per_save,save_format,EKQP)
 
                 if save_options[24]:
-                    IOSave(loc,'2EnergySI',0,save_format,ESIP)
+                    IOSave(loc,'2EnergySI',(ix + 1) % its_per_save,save_format,ESIP)
            
 ################################################################################
 # SAVE DESIRED OUTPUTS
