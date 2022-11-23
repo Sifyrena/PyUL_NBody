@@ -4338,13 +4338,14 @@ def Resample3Box(psi, COM, XAR, loc, save_num, save_format, Length_Ratio = 0.5, 
         IOSave(loc,'3DensityRS',save_num,save_format,RhoNew)
 
 
-def Wfn_to_PyUL1(psi, Length, resolR):
-    
+def Wfn_to_PyUL1(psi):
+
     from scipy.interpolate import RegularGridInterpolator as RPI
     # Note that phase correction is not performed in this version.
     
-    lengthCR = Length  
-
+    lengthCR = 1 
+    resolR = psi.shape[0]
+    
     GVR = np.linspace(-lengthCR / 2.0 + lengthCR / float(2 * resolR), lengthCR / 2.0 - lengthCR / float(2 * resolR), int(resolR), endpoint = True)
     XAR = np.linspace(-lengthCR/2, lengthCR/2, int(resolR), endpoint = False)
         
@@ -4354,14 +4355,12 @@ def Wfn_to_PyUL1(psi, Length, resolR):
     NewGrid = np.meshgrid(
         GVR , GVR , GVR ,
         sparse=False, indexing='ij')
-
+    
     NewGrid_List = np.reshape(NewGrid, (3, -1), order='C').T
-
+    
     IReal = Real_I(NewGrid_List)
     IImag = Imag_I(NewGrid_List)
-
+    
     IPsi = ne.evaluate("IReal + 1j*IImag")
-
+    
     return np.reshape(IPsi,(resolR,resolR,resolR))
-    
-    
