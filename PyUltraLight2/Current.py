@@ -4318,7 +4318,7 @@ def Resample3Box(psi, COM, XAR, loc, save_num, save_format, Length_Ratio = 0.5, 
     
     NewGrid = np.meshgrid(
         GVR + COM[0], GVR + COM[1], GVR + COM[2],
-        sparse=True, indexing='ij')
+        sparse=False, indexing='ij')
 
     NewGrid_List = np.reshape(NewGrid, (3, -1), order='C').T
 
