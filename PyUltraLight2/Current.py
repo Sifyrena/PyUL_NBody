@@ -1,6 +1,6 @@
 Version   = str('PyUL') # Handle used in console.
-D_version = str('Build 2022 November 24 Public') # Detailed Version
-S_version = 26.2 # Short Version
+D_version = str('Build 2022 December 1 Public') # Detailed Version
+S_version = 26.3 # Short Version
 
 # Housekeeping
 import time
@@ -81,11 +81,12 @@ mass_unit = (3 * H_0 ** 2 * omega_m0 / (8 * pi)) ** 0.25 * hbar ** 1.5 / (axion_
 energy_unit = mass_unit * length_unit ** 2 / (time_unit**2)
     
 #####################################################################################
-    
 ### Internal Flags used for IO
-SFS = '3Density 3Wfn 2Density Energy 1Density NBody 3Grav 2Grav DF 2Phase Entropy 1Grav 3GravF 2GravF 1GravF 3UMmt 2UMmt 1UMmt Momentum AngMomentum 3DensityRS 3WfnRS 2EnergyTot 2EnergyKQ 2EnergySI'
 
-SNM = 'R3D P3D R2D EGY R1D NTM G3D G2D DYF A2D ENT G1D F3D F2D F1D V3D V2D V1D PMT MVR R3R P3R E2T E2K E2G'
+SFS = '3Density 3Wfn 2Density Energy 1Density NBody 3Grav 2Grav DF 2Phase Entropy 1Grav 3GravF 2GravF 1GravF 3UMmt 2UMmt 1UMmt Momentum AngMomentum 3DensityRS 3WfnRS 2EnergyTot 2EnergyKQ 2EnergySI ULDCOM'
+
+# .    0   1   2   3   4   5   6   7   8   9   10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25
+SNM = 'R3D P3D R2D EGY R1D NTM G3D G2D DYF A2D ENT G1D F3D F2D F1D V3D V2D V1D PMT MVR R3R P3R E2T E2K E2G UCM'
 
 SaveFlags = SFS.split()
 SaveNames = SNM.split()
@@ -729,6 +730,8 @@ def save_grid(
             phi_line = phi[int(resol/2),:,int(resol/2)]
             
             IOSave(loc,'1GravF',save_num,save_format,phi_line)
+
+
         
 # CALCULATE_ENERGIES, NEW VERSION IN 2.16
             
@@ -2238,10 +2241,17 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         
     rho = rho.real
     
-    if CenterCalc:
+    if CenterCalc or save_options[25]:
         LocCOM = Find3BoxCOM(rho,xarray, yarray, zarray)
-        printU(LocCOM, "COM", ToScreen = False, ToFile= GenerateLog, FilePath= LogLocation) 
-        Resample3Box(psi, LocCOM, gridvec, loc, 0, save_format, Length_Ratio, resolR, Save_Rho = save_options[20], Save_Psi = save_options[21])
+        
+        if save_options[25]:
+            IOSave(loc,'ULDCOM',0,save_format,data = LocCOM)
+        
+        if CenterCalc:
+            printU(LocCOM, "COM", ToScreen = False, ToFile= GenerateLog, FilePath= LogLocation) 
+            Resample3Box(psi, LocCOM, gridvec, loc, 0, save_format, Length_Ratio, resolR, Save_Rho = save_options[20], Save_Psi = save_options[21])
+
+
     ##########################################################################################
     # COMPUTE SIZE OF TIMESTEP (CAN BE INCREASED WITH step_factor)
 
@@ -2278,13 +2288,13 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         
         if save_options[18]:
             printU('Saving ULDM momentum.','Momentum', ToFile= GenerateLog, FilePath= LogLocation)
-            IOSave(loc,'Momentum',momentum_I,save_format = 'npy',data = pOut)
+            IOSave(loc,'Momentum',momentum_I,save_format,data = pOut)
 
         if save_options[19]:
             printU('Saving ULDM angular momentum with respect to origin.','Momentum', ToFile= GenerateLog, FilePath= LogLocation)
-            IOSave(loc,'AngMomentum',momentum_I,save_format = 'npy',data = LOut)
+            IOSave(loc,'AngMomentum',momentum_I,save_format,data = LOut)
         
-
+    
     
     ##########################################################################################
     # SETUP PADDED POTENTIAL HERE (From JLZ)
@@ -2709,6 +2719,13 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
             
             GridMass.append(Vcell*np.sum(rho))
             np.save(os.path.join(os.path.expanduser(loc), "Outputs/ULDMass.npy"), GridMass)
+
+            if save_options[25]:
+
+                if not CenterCalc:
+                    LocCOM = Find3BoxCOM(rho,xarray, yarray, zarray) # Happen at different freqs.
+                
+                IOSave(loc,'ULDCOM',int((ix + 1) / its_per_save),save_format,data = LocCOM)
             
             if (save_options[3]):  
                 np.save(os.path.join(os.path.expanduser(loc), "Outputs/egylist.npy"), egylist)
@@ -4318,7 +4335,7 @@ def Resample3Box(psi, COM, XAR, loc, save_num, save_format, Length_Ratio = 0.5, 
     
     NewGrid = np.meshgrid(
         GVR + COM[0], GVR + COM[1], GVR + COM[2],
-        sparse=True, indexing='ij')
+        sparse=False, indexing='ij')
 
     NewGrid_List = np.reshape(NewGrid, (3, -1), order='C').T
 
@@ -4364,3 +4381,19 @@ def Wfn_to_PyUL1(psi):
     IPsi = ne.evaluate("IReal + 1j*IImag")
     
     return np.reshape(IPsi,(resolR,resolR,resolR))
+
+
+def GetMagn(Vectors):
+    
+    Vectors = np.array(Vectors)
+    
+    if len(Vectors.shape) != 2:
+        raise ValueError("Input must be 2-D Array")
+        
+    if Vectors.shape[0] > Vectors.shape[1]:
+        
+        return np.sqrt(np.sum(Vectors**2, axis = 1))
+        
+    else:
+        
+        return np.sqrt(np.sum(Vectors**2, axis = 0))
