@@ -4381,6 +4381,7 @@ def Wfn_to_PyUL1(psi):
     IPsi = ne.evaluate("IReal + 1j*IImag")
     
     return np.reshape(IPsi,(resolR,resolR,resolR))
+<<<<<<< HEAD
 
 
 def GetMagn(Vectors):
@@ -4397,3 +4398,5 @@ def GetMagn(Vectors):
     else:
         
         return np.sqrt(np.sum(Vectors**2, axis = 0))
+=======
+>>>>>>> 83456c8bc632aad01c9f9675290d451f7aed39e6
