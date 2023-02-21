@@ -1,6 +1,6 @@
 Version   = str('PyUL') # Handle used in console.
-D_version = str('Build 2022 December 1 Public') # Detailed Version
-S_version = 26.3 # Short Version
+D_version = str('Build 2023 February 21 Public HotFix') # Detailed Version
+S_version = 26.31 # Short Version
 
 # Housekeeping
 import time
@@ -613,7 +613,11 @@ def InitSolitonF(gridVec, position, resol, alpha, delta_x=0.00001, DR = 1):
 
     DistArrPts = DistArr.reshape(resol**3)
 
-    return fInterp(DistArrPts).reshape(resol, resol, resol)
+    Eval = fInterp(DistArrPts)
+    
+    Eval[DistArrPts > fR[-1]] = 0 # Fix Cubic Spline Behaviour
+
+    return Eval.reshape(resol,resol,resol)
 
 
 def initsoliton(funct, xarray, yarray, zarray, position, alpha, f, delta_x,Cutoff = 9, DR = 1):
@@ -4381,22 +4385,3 @@ def Wfn_to_PyUL1(psi):
     IPsi = ne.evaluate("IReal + 1j*IImag")
     
     return np.reshape(IPsi,(resolR,resolR,resolR))
-<<<<<<< HEAD
-
-
-def GetMagn(Vectors):
-    
-    Vectors = np.array(Vectors)
-    
-    if len(Vectors.shape) != 2:
-        raise ValueError("Input must be 2-D Array")
-        
-    if Vectors.shape[0] > Vectors.shape[1]:
-        
-        return np.sqrt(np.sum(Vectors**2, axis = 1))
-        
-    else:
-        
-        return np.sqrt(np.sum(Vectors**2, axis = 0))
-=======
->>>>>>> 83456c8bc632aad01c9f9675290d451f7aed39e6
