@@ -1,6 +1,6 @@
 Version   = str('PyUL') # Handle used in console.
-D_version = str('Build 2023 February 21 Public HotFix') # Detailed Version
-S_version = 26.31 # Short Version
+D_version = str('Build 2023 March 07 Public') # Detailed Version
+S_version = 26.32 # Short Version
 
 # Housekeeping
 import time
@@ -391,7 +391,7 @@ def convert(value, unit, type):
     if (type == 'l'):
         if (unit == ''):
             converted = value
-        elif (unit == 'm'):
+        elif (unit == 'm') or (unit == 'SI'):
             converted = value / length_unit
         elif (unit == 'km'):
             converted = value * 1e3 / length_unit
@@ -409,7 +409,7 @@ def convert(value, unit, type):
     elif (type == 'm'):
         if (unit == ''):
             converted = value
-        elif (unit == 'kg'):
+        elif (unit == 'kg') or (unit == 'SI'):
             converted = value / mass_unit
         elif (unit == 'solar_masses'):
             converted = value * solar_mass / mass_unit
@@ -421,7 +421,7 @@ def convert(value, unit, type):
     elif (type == 't'):
         if (unit == ''):
             converted = value
-        elif (unit == 's'):
+        elif (unit == 's') or (unit == 'SI'):
             converted = value / time_unit
         elif (unit == 'yr'):
             converted = value * 60 * 60 * 24 * 365 / time_unit
@@ -437,7 +437,7 @@ def convert(value, unit, type):
     elif (type == 'v'):
         if (unit == ''):
             converted = value
-        elif (unit == 'm/s'):
+        elif (unit == 'm/s') or (unit == 'SI'):
             converted = value * time_unit / length_unit
         elif (unit == 'km/s'):
             converted = value * 1e3 * time_unit / length_unit
@@ -458,7 +458,7 @@ def convert(value, unit, type):
             converted = value * solar_mass / mass_unit * length_unit**3 / parsec**3     
         elif (unit == 'MMSol/kpc3'):
             converted = value * solar_mass / mass_unit * length_unit**3 / parsec**3  / 1000  
-        elif (unit == 'kg/m3'):
+        elif (unit == 'kg/m3' or (unit == 'SI'):
             converted = value / mass_unit * length_unit**3
         else:
             raise NameError('Unsupported DENSITY unit used')
@@ -467,10 +467,10 @@ def convert(value, unit, type):
     elif (type == 'a'):
         if (unit == ''):
             converted = value
-        elif (unit == 'm/s2'):
+        elif (unit == 'm/s2') or (unit == 'SI'):
             converted = value / length_unit * time_unit**2   
         else:
-            raise NameError('Unsupported DENSITY unit used')
+            raise NameError('Unsupported ACCELERATION unit used')
 
     else:
         raise TypeError('Unsupported conversion type')
@@ -486,7 +486,7 @@ def convert_back(value, unit, type):
     if (type == 'l'):
         if (unit == ''):
             converted = value
-        elif (unit == 'm'):
+        elif (unit == 'm') or (unit == 'SI'):
             converted = value * length_unit
         elif (unit == 'km'):
             converted = value / 1e3 * length_unit
@@ -504,7 +504,7 @@ def convert_back(value, unit, type):
     elif (type == 'm'):
         if (unit == ''):
             converted = value
-        elif (unit == 'kg'):
+        elif (unit == 'kg') or (unit == 'SI'):
             converted = value * mass_unit
         elif (unit == 'solar_masses'):
             converted = value / solar_mass * mass_unit
@@ -516,7 +516,7 @@ def convert_back(value, unit, type):
     elif (type == 't'):
         if (unit == ''):
             converted = value
-        elif (unit == 's'):
+        elif (unit == 's' or (unit == 'SI'):
             converted = value * time_unit
         elif (unit == 'yr'):
             converted = value / (60 * 60 * 24 * 365) * time_unit
@@ -532,7 +532,7 @@ def convert_back(value, unit, type):
     elif (type == 'v'):
         if (unit == ''):
             converted = value
-        elif (unit == 'm/s'):
+        elif (unit == 'm/s') or (unit == 'SI'):
             converted = value / time_unit * length_unit
         elif (unit == 'km/s'):
             converted = value / (1e3) / time_unit * length_unit
@@ -553,7 +553,7 @@ def convert_back(value, unit, type):
             converted = value / solar_mass * mass_unit / length_unit**3 * parsec**3
         elif (unit == 'MMSol/kpc3'):
             converted = value / solar_mass * mass_unit / length_unit**3 * parsec**3 * 1000
-        elif (unit == 'kg/m3'):
+        elif (unit == 'kg/m3') or (unit == 'SI'):
             converted = value * mass_unit / length_unit**3
         else:
             raise NameError('Unsupported DENSITY unit used')
@@ -561,10 +561,10 @@ def convert_back(value, unit, type):
     elif (type == 'a'):
         if (unit == ''):
             converted = value
-        elif (unit == 'm/s2'):
+        elif (unit == 'm/s2') or (unit == 'SI') :
             converted = value * length_unit / time_unit**2   
         else:
-            raise NameError('Unsupported DENSITY unit used')        
+            raise NameError('Unsupported ACCELERATION unit used')        
             
     else:
         raise TypeError('Unsupported conversion type')
