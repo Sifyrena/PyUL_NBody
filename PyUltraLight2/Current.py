@@ -458,7 +458,7 @@ def convert(value, unit, type):
             converted = value * solar_mass / mass_unit * length_unit**3 / parsec**3     
         elif (unit == 'MMSol/kpc3'):
             converted = value * solar_mass / mass_unit * length_unit**3 / parsec**3  / 1000  
-        elif (unit == 'kg/m3' or (unit == 'SI'):
+        elif (unit == 'kg/m3') or (unit == 'SI'):
             converted = value / mass_unit * length_unit**3
         else:
             raise NameError('Unsupported DENSITY unit used')
@@ -4129,20 +4129,41 @@ def DefaultSolitonOrbit(resol,length, length_units, s_mass, s_mass_unit, m_radiu
     return convert_back(MInt, s_mass_unit,'m'), convert_back(VC,m_velocity_unit,'v')
 
 
-def InterpolateCurve(x,y, Resol = 1800):
+def InterpolateCurve(x,y, Resol = 1800, ResolGain = 10):
     import scipy.interpolate as SInt
     t = np.arange(len(x))
 
     BSplineX = SInt.make_interp_spline(t,x)
     BSplineY = SInt.make_interp_spline(t,y)
     
-    
+    if ResolGain > 0:
+        Resol = int(len(x) * ResolGain)
+              
     T = np.linspace(t[0],t[-1],Resol)
     
     Fitx = BSplineX(T)
     Fity = BSplineY(T)
     
     return Fitx, Fity
+              
+def InterpolateCurve3(x,y,z, Resol = 1800, ResolGain = 10):
+    import scipy.interpolate as SInt
+    t = np.arange(len(x))
+
+    BSplineX = SInt.make_interp_spline(t,x)
+    BSplineY = SInt.make_interp_spline(t,y)
+    BSplineZ = SInt.make_interp_spline(t,y)
+    
+    if ResolGain > 0:
+        Resol = int(len(x) * ResolGain)
+    
+    T = np.linspace(t[0],t[-1],Resol)
+    
+    Fitx = BSplineX(T)
+    Fity = BSplineY(T)
+    Fitz = BSplineZ(T)
+    
+    return Fitx, Fity, Fitz
 
 
 
