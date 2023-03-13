@@ -516,7 +516,7 @@ def convert_back(value, unit, type):
     elif (type == 't'):
         if (unit == ''):
             converted = value
-        elif (unit == 's' or (unit == 'SI'):
+        elif (unit == 's') or (unit == 'SI'):
             converted = value * time_unit
         elif (unit == 'yr'):
             converted = value / (60 * 60 * 24 * 365) * time_unit
