@@ -2586,7 +2586,6 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
         else:
             psi = ne.evaluate("exp(-1j*h*phi)*psi")
         
-        
         funct = fft_psi(psi)
 
         ###### New Momentum Evaluator
@@ -2612,7 +2611,6 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
             prog_bar(actual_num_steps, ix + 1, tint,'DS',PBEDisp)
             psi *= np.exp(-PreMult*h)
         
-
         rho = ne.evaluate("abs(abs(psi)**2)").real
         
         if CenterCalc:
@@ -2620,7 +2618,6 @@ def evolve(save_path,run_folder, EdgeClear = False, DumpInit = False, DumpFinal 
             printU(LocCOM, "COM", ToScreen = False, ToFile= GenerateLog, FilePath= LogLocation)
             
             
-
         phik = rfft_rho(rho)  # not actually phik but phik is defined in next line
             
         phik = ne.evaluate("-4*pi*phik/rkarray2")
