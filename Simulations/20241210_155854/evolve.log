@@ -1,0 +1,8 @@
+20241210_155854 PyUL2.  Sys: Starting RUN at ./Simulations/20241210_155854!
+20241210_155854 PyUL2.  FFT: Using 10 CPU Threads for FFT.
+20241210_155854 PyUL2.   IO: Loaded Config from ./Simulations/20241210_155854
+20241210_155854 PyUL2.   IO: Data to save this run:
+3Density 3Wfn 2Density Energy 1Density NBody 3Grav 2Grav DF 2Phase Entropy 1Grav 3GravF 2GravF 1GravF 3UMmt 2UMmt 1UMmt Momentum AngMomentum 3DensityRS 3WfnRS 2EnergyTot 2EnergyKQ 2EnergySI ULDCOM 2DensityRS Quadrupole 2Momentum 
+20241210_155854 PyUL2.NBody: Using Linear Interpolation for gravity.
+20241210_155854 PyUL2.  FFT: Simulation grid resolution is 256^3.
+20241210_155854 PyUL2. Init: Loaded standard soliton radial profile.

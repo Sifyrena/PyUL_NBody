@@ -1,0 +1,10 @@
+20241210_161819 PyUL2.  Sys: Starting RUN at ./Simulations/20241210_161819!
+20241210_161819 PyUL2.  FFT: Using 10 CPU Threads for FFT.
+20241210_161819 PyUL2.   IO: Copied Current Config to ./Simulations/20241210_161819
+20241210_161819 PyUL2.   IO: Data to save:
+Energy 1Density NBody DF Entropy 
+20241210_161819 PyUL2.NBody: Using Linear Interpolation for gravity.
+20241210_161819 PyUL2.  FFT: Simulation grid resolution is 256^3.
+20241210_161819 PyUL2. Init: Loaded standard soliton radial profile.
+20241210_161821 PyUL2.   SP: Poisson Equation Solved Using FFT.
+20241210_161821 PyUL2. Init: Successfully initiated Wavefunction and NBody Initial Conditions.
