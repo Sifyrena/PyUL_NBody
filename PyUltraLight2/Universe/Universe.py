@@ -45,7 +45,6 @@ class ULDMUniverse():
         
         self.energy_unit = self.mass_unit * self.length_unit ** 2 / (time_unit**2)
         
-    @classmethod
     def convert(self ,value, unit, type):
         converted = 0
         if (type == 'l'):
@@ -147,7 +146,6 @@ class ULDMUniverse():
         return converted
 
     ####################### FUNCTION TO CONVERT FROM DIMENSIONLESS UNITS TO DESIRED UNITS
-    @classmethod
     def convert_back(self, value, unit, type):
         converted = 0
         if (type == 'l'):
@@ -246,7 +244,6 @@ class ULDMUniverse():
             raise TypeError('Unsupported conversion type')
     
         return converted
-    
     
     def convert_between(self,value, oldunit,newunit, type):
         

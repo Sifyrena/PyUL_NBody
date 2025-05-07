@@ -101,7 +101,7 @@ def Evolve(config_or_path, Silent = False, Message = '', **kwargs):
             Protect = str(input())
         
         if Protect == 'n':
-            return
+            return loc
         
         elif Protect == 'Y':
             import shutil
@@ -112,7 +112,7 @@ def Evolve(config_or_path, Silent = False, Message = '', **kwargs):
             os.mkdir(str(loc + '/Outputs'))
             
         else:
-            return
+            return loc
     GenerateLog = config.RUNTIME["GenerateLog"]
     LogLocation = f"{loc}/evolve.log"
 
@@ -734,11 +734,11 @@ def Evolve(config_or_path, Silent = False, Message = '', **kwargs):
         raise RuntimeError("Something is seriously wrong.")
     
     if DumpInit:
-        printU(f'Successfully initiated Wavefunction and NBody Initial Conditions. Dumping to file.','IO', ToFile= GenerateLog, FilePath= LogLocation)
+        printU(f'Successfully initiated Wavefunction and NBody Initial Conditions. Dumping to file and Quitting.','IO', ToFile= GenerateLog, FilePath= LogLocation)
     
         ULDump(loc,psi,TMState,'Init')
         
-        return
+        return loc
         
     
     else:
@@ -834,9 +834,7 @@ def Evolve(config_or_path, Silent = False, Message = '', **kwargs):
         
                 pXAr, pYAr, pZAr = pEval(psi,rho,funct,resol,gridvec,Kx,Ky,Kz,ifft_funct)
 
-                IOSave(loc,'2Momentum',momentum_I,save_format,data = np.array([pXAr[:,:,resol//2], 
-                                                                               pYAr[:,:,resol//2], 
-                                                                               pZAr[:,:,resol//2]]))
+                IOSave(loc,'2Momentum',momentum_I,save_format,data = np.array([pXAr[:,:,resol//2],   pYAr[:,:,resol//2], pZAr[:,:,resol//2]]))
                 
                 save_options[18] = 0
                 save_options[19] = 0
@@ -1103,3 +1101,4 @@ def Evolve(config_or_path, Silent = False, Message = '', **kwargs):
         file = open(f'{loc}/StoppingTime.uldm', "w+")
         file.write('-1')
         file.close()
+    return loc
