@@ -489,11 +489,11 @@ class Data:
         
         # Always load energy.
         self.ETotal = np.load((self.loc + '/Outputs/egylist.npy'), allow_pickle=True) 
-        self.EGP_NB = np.load((self.loc + '/Outputs/egylist.npy'), allow_pickle=True) 
-        self.EGP_NB2 = np.load((self.loc + '/Outputs/egylist.npy'), allow_pickle=True) 
-        self.EGP_UL = np.load((self.loc + '/Outputs/egylist.npy'), allow_pickle=True) 
-        self.EKQ = np.load((self.loc + '/Outputs/egylist.npy'), allow_pickle=True)
-        self.mTotal = np.load((self.loc + '/Outputs/egylist.npy'), allow_pickle=True) 
+        self.EGP_NB = np.load((self.loc + '/Outputs/egpcmlist.npy'), allow_pickle=True) 
+        self.EGP_NB2 = np.load((self.loc + '/Outputs/egpcmMlist.npy'), allow_pickle=True) 
+        self.EGP_UL = np.load((self.loc + '/Outputs/egpsilist.npy'), allow_pickle=True) 
+        self.EKQ = np.load((self.loc + '/Outputs/ekandqlist.npy'), allow_pickle=True)
+        self.mTotal = np.load((self.loc + '/Outputs/masseslist.npy'), allow_pickle=True) 
         
         self.EndNum, self.Loaded = Load_npys(self.loc, self.save_flags, Extension=self.save_format)
 
@@ -502,22 +502,10 @@ class Data:
         if self.EndNum < self.save_number:
             print("Did the run end early?")
             
-        self.has_2D = "2Density" in self.Loaded
-        self.has_1D = "1Density" in self.Loaded
-
-        if self.has_2D:
-            self.density_2d = self.Loaded["2Density"]
-            self.phi_2d = self.Loaded["2Grav"]
-
-        if self.has_1D:
-            self.density_1d = self.Loaded["1Density"]
-            self.phi1d_filtered = self.Loaded["1Grav"]
-
         self.nbody = np.array(self.Loaded["NBody"])
         #self.grad = np.array(self.Loaded["DF"])
         #self.center_of_mass = np.array(self.Loaded["ULDCOM"])
 
-        self.Loaded = {}
         self._apply_unit_conversions()
 
     def _apply_unit_conversions(self):
