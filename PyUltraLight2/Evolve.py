@@ -185,7 +185,7 @@ def Evolve(config_or_path, Silent = False, Message = '', **kwargs):
     # ULDM Self Interaction
     SelfInt = config.uldm["SI"]
     lambda_hat = config.uldm["LHat"]
-
+    
     # Initialization Flags
     DumpInit = config.INIT["DumpInit"]
     DumpFinal = config.INIT["DumpFinal"]
@@ -279,6 +279,9 @@ def Evolve(config_or_path, Silent = False, Message = '', **kwargs):
         print("WARNING: The Wavefunction on the boundary planes will be Auto-Zeroed at every iteration.")
 
     print('==========================Consistency=================================')
+    
+    if SelfInt:
+        print(f"Enabling additional ULDM Self-Interactions, L_hat = {lambda_hat:.5g}")
 
     if NBodyGravity:
         print(f"Particle gravity  ON.") 
@@ -302,10 +305,10 @@ def Evolve(config_or_path, Silent = False, Message = '', **kwargs):
     print('==========================Stopping Conditions=================================')
     
     if AutoStop and Uniform and NumTM == 1:
-        print("Integration will automatically halt when test mass stops.")
+        print("Sim will automatically halt when test mass #0 stops.")
         
     if AutoStop2:
-        print(f"Integration will automatically halt when lowest potential exceeds {WellThreshold}x N body initial.")
+        print(f"Sim will automatically halt when lowest potential exceeds {WellThreshold}x N body initial.")
     
 
     print('===============================================================================')
@@ -508,8 +511,8 @@ def Evolve(config_or_path, Silent = False, Message = '', **kwargs):
         momentum_I = 0
         printU('Saving ULDM momentum array.','2Momentum', ToFile= GenerateLog, FilePath= LogLocation)
         IOSave(loc,'2Momentum',momentum_I,save_format,data = np.array([pXAr[:,:,resol//2], 
-                                                                       pYAr[:,:,resol//2], 
-                                                                       pZAr[:,:,resol//2]]))
+        pYAr[:,:,resol//2], 
+        pZAr[:,:,resol//2]]))
         
     
     if save_options[18] or save_options[19]:
@@ -529,7 +532,7 @@ def Evolve(config_or_path, Silent = False, Message = '', **kwargs):
     
     
     ##########################################################################################
-    # SETUP PADDED POTENTIAL HERE (From JLZ)
+    # SETUP PADDED POTENTIAL HERE (From Luna)
     
     if IsoP:
         rhopad = pyfftw.zeros_aligned((2*resol, resol, resol), dtype='complex128')
@@ -814,6 +817,7 @@ def Evolve(config_or_path, Silent = False, Message = '', **kwargs):
                 
         TIntegrate += h
         prog_bar(actual_num_steps, ix + 1, tint,'FT',PBEDisp)
+              
         if HaSt == 1:
             psi = ne.evaluate("exp(-1j*0.5*h*phi)*psi")
             HaSt = 0
@@ -821,6 +825,8 @@ def Evolve(config_or_path, Silent = False, Message = '', **kwargs):
         else:
             psi = ne.evaluate("exp(-1j*h*phi)*psi")
         
+        if SelfInt:
+            psi = ne.evaluate("exp(-1j*h*Lambda_hat*rho)*psi")
         
         funct = fft_psi(psi)
             
@@ -974,7 +980,10 @@ def Evolve(config_or_path, Silent = False, Message = '', **kwargs):
         #Next if statement ensures that an extra half step is performed at each save point
         if (((ix + 1) % its_per_save) == 0) and HaSt == 0:
             psi = ne.evaluate("exp(-1j*0.5*h*phi)*psi")
-
+            
+            if SelfInt:
+                psi = ne.evaluate("exp(-1j*h*Lambda_hat*rho)*psi")
+                
             rho = ne.evaluate("abs(abs(psi)**2)")
             HaSt = 1
             rho = rho.real

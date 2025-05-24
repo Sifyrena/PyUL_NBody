@@ -20,7 +20,7 @@ arxiv.org/abs/1807.04037")
         print("\nEmbedded Soliton Profiles \nAdapted from N. Guo et al.")
         
     if SI:
-        print("\nULDM Self Interaction Enabled as a Quartic Extra Potential:\nBased on work by Stallovits, M. and Rindler-Daller T. \n\
+        print("\nULDM Self Interaction Enabled as a Quartic Extra Potential:\nBased on Stallovits, M. and Rindler-Daller T. \n\
 arxiv.org/abs/2406.07419"
         )
     print(f"==============================================================================")
