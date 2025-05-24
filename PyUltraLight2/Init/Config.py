@@ -164,13 +164,13 @@ class Config:
     def ULDStepEst(self,save_number = -1):
         
         duration = self.Time["TimeDuration"]
-        duration_units = self.Time["TimeDurationUnits"]
+        duration_units = self.Time["TimeUnits"]
 
         length = self.Sim["Length"]
         length_units = self.Sim["LengthUnits"]
 
         resol = self.Sim["Resolution"]  # or self.Sim["Resolution"], depending on your config
-        step_factor = self.Time["TimeStepFactor"]
+        step_factor = self.Time["StepFactor"]
         
         from PyUltraLight2.Universe.Universe import ULDMUniverse
         self.Universe = ULDMUniverse(m22)
