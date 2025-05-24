@@ -3,7 +3,6 @@ import builtins
 SSLength = 7
 
 from PyUltraLight2.Version import *
-from PyUltraLight2.Utils.IO import GenFromTime
 
 def printU(Message,SubSys = 'Sys',ToScreen = True, ToFile = False, FilePath = ''):
 
@@ -11,5 +10,6 @@ def printU(Message,SubSys = 'Sys',ToScreen = True, ToFile = False, FilePath = ''
         builtins.print(f"{Version}{SubSys.rjust(SSLength)}: {Message}")
         
     if ToFile and FilePath != "":
+        from PyUltraLight2.Utils.IO import GenFromTime
         with open(FilePath, "a+") as o:
             o.write(f"{GenFromTime()} {Version}.{SubSys.rjust(SSLength)}: {Message}\n")

@@ -160,3 +160,48 @@ class Config:
         with open(file_path, 'r') as f:
             data = json.load(f)
             self.__dict__.update(data)
+            
+    def ULDStepEst(self,save_number = -1):
+        
+        duration = self.Time["TimeDuration"]
+        duration_units = self.Time["TimeDurationUnits"]
+
+        length = self.Sim["Length"]
+        length_units = self.Sim["LengthUnits"]
+
+        resol = self.Sim["Resolution"]  # or self.Sim["Resolution"], depending on your config
+        step_factor = self.Time["TimeStepFactor"]
+        
+        from PyUltraLight2.Universe.Universe import ULDMUniverse
+        self.Universe = ULDMUniverse(m22)
+        self.axion_E = self.Universe.axion_E
+        self.length_unit = self.Universe.length_unit
+        self.mass_unit = self.Universe.mass_unit
+        self.energy_unit = self.Universe.energy_unit
+        self.convert = self.Universe.convert
+        self.convert_back = self.Universe.convert_back
+        self.convert_between = self.Universe.convert_between
+        
+        
+        lengthC = self.convert(length, length_units, 'l')
+    
+        t = self.convert(duration, duration_units, 't')
+        
+        delta_t = (lengthC/float(resol))**2/np.pi
+
+        min_num_steps = np.ceil(t / delta_t)
+        MinUS = int(min_num_steps//step_factor)
+
+        #print(f'The required number of ULDM steps is {MinUS}')
+        
+        if save_number > 0:
+            
+            if save_number >= MinUS:
+                MinUS = int(save_number)
+            
+            else:
+                MinUS = int(save_number * (MinUS // (save_number) + 1))
+                
+        #print(f'The actual ULDM steps is {MinUS}')
+        
+        return MinUS

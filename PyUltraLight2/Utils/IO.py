@@ -1,5 +1,7 @@
 import numpy as np
 import h5py
+import os
+
 
 # Function to generate default folder names
 def GenFromTime():
@@ -261,6 +263,62 @@ def ULRead(InitPath):
     psi = np.load(f'{InitPath}_psi.npy')
     return psi
 
+
+def Load_npys(loc,save_options, Extension = "npy", Old = False):
+    
+    if Extension == "hdf5":
+        Loader = IOLoad_h5
+    else: 
+        Loader = IOLoad_npy
+    
+    if Old:
+        if Extension == "hdf5":
+            Loader = IOLoad_h5_O
+        else: 
+            Loader = IOLoad_npy_O
+
+    print('3D saves are not automatically loaded. Please load them manually!')
+    save_options[0] = False
+    save_options[1] = False
+    save_options[6] = False
+    save_options[12] = False
+    save_options[20] = False
+    save_options[21] = False
+        
+    SaveWordList = SaveOptionsCompile(save_options).split()
+    
+    Out = {}
+    
+    print(SaveWordList)
+    
+    Out['Directory'] = loc
+    
+    for Word in SaveWordList:
+        if (Word != 'Energy') and (Word != 'Entropy'): 
+            Out[Word] = []
+        
+    import time   
+    import warnings 
+    warnings.filterwarnings("ignore")
+    x = 0
+    success = True
+
+    while success:
+        
+        try:
+            for Word in SaveWordList:
+                if (Word != 'Energy') and (Word != 'Entropy') and (Word != 'Momentum') and (Word != 'AngMomentum'): 
+                    Out[Word].append(Loader(loc,Word,x))        
+            x += 1
+        
+        except:
+            success = False
+
+    print(f"Loaded {x} Data Entries from {loc}!")
+    
+    return x, Out
+
+
 def LoadConfig(loc):
         
         configfile = loc + '/config.uldm'
@@ -350,3 +408,146 @@ def LoadConfig(loc):
       
          
         return  NS, length, length_units, resol, duration, duration_units, step_factor, save_number, save_options, save_format, s_mass_unit, s_position_unit, s_velocity_unit, solitons,start_time, m_mass_unit, m_position_unit, m_velocity_unit, particles, embeds, Uniform,Density, density_unit,a, UVel
+    
+
+from PyUltraLight2.Universe.Universe import ULDMUniverse
+from PyUltraLight2.Init.Config import Config
+#
+class Data:
+        
+    def __init__(self, save_path):
+
+        self.save_path = save_path
+        self.loc = save_path
+ 
+        config = Config()
+        config.FromFile(f"{self.loc}/config.uldm") 
+
+        
+        self.config = config
+        # Initialize the ULDM Universe based on config
+        m22 = self.config.uldm["m22"]
+        self.Universe = ULDMUniverse(m22)
+        self.axion_E = self.Universe.axion_E
+        self.length_unit = self.Universe.length_unit
+        self.mass_unit = self.Universe.mass_unit
+        self.energy_unit = self.Universe.energy_unit
+        self.convert = self.Universe.convert
+        self.convert_back = self.Universe.convert_back
+        self.convert_between = self.Universe.convert_between
+
+        # Load Config-dependent values
+        self._load_config_values()
+
+        # Load arrays (you can customize this based on 2D/1D flags)
+        self._load_npy_data()
+
+    def _load_config_values(self):
+        c = self.config
+        space = c.Space
+        time = c.Time
+        uldm = c.uldm
+        bh = c.BlackHole
+
+        self.resolution = space["Resolution"]
+        self.length = space["Box"]["BoxLength"]
+        self.dx = self.length / self.resolution
+        self.resol = self.resolution # just a shorthand we are used to.
+        self.length_units = space["Box"]["LengthUnits"]
+        self.duration = time["TimeDuration"]
+        self.duration_units = time["TimeUnits"]
+        self.start_time = time["StartTime"]
+        self.step_factor = time["StepFactor"]
+        
+        # 
+        
+        if c.LEGACY["Shift"]:
+            self.xAr = np.linspace(-1*(self.length-dx)/2,(self.length-dx)/2, self.resol, endpoint = True)
+        else:
+            self.xAr = np.linspace(-self.length/2, self.length/2, self.resol, endpoint = False)
+        
+        self.save_number = c.Saving["Number"] # if early termination may not bre reached
+        
+        if self.save_number == -1:
+            self.save_number = c.ULDStepEst()
+            
+        
+        self.save_format = c.Saving["Format"]
+        self.save_flags = SaveOptionsDigest(c.Saving["Flags"])
+
+        self.particles = bh["MatterParticles"]["Condition"]
+        self.solitons = uldm["Solitons"]["Condition"]
+        self.embeds = uldm["Solitons"]["Embedded"]
+        self.density = uldm["Modifier"]["UniformFieldAddOn"]["DensityValue"]
+        self.density_unit = uldm["Modifier"]["UniformFieldAddOn"]["DensityUnit"]
+        self.uniform_velocity = uldm["Modifier"]["UniformFieldAddOn"]["UniformVelocity"]
+
+
+
+
+    def _load_npy_data(self):
+        
+        # Always load energy.
+        self.ETotal = np.load((self.loc + '/Outputs/egylist.npy'), allow_pickle=True) 
+        self.EGP_NB = np.load((self.loc + '/Outputs/egylist.npy'), allow_pickle=True) 
+        self.EGP_NB2 = np.load((self.loc + '/Outputs/egylist.npy'), allow_pickle=True) 
+        self.EGP_UL = np.load((self.loc + '/Outputs/egylist.npy'), allow_pickle=True) 
+        self.EKQ = np.load((self.loc + '/Outputs/egylist.npy'), allow_pickle=True)
+        self.mTotal = np.load((self.loc + '/Outputs/egylist.npy'), allow_pickle=True) 
+        
+        self.EndNum, self.Loaded = Load_npys(self.loc, self.save_flags, Extension=self.save_format)
+
+        self.Tp = np.arange(self.EndNum) / self.save_number * self.duration #
+
+        if self.EndNum < self.save_number:
+            print("Did the run end early?")
+            
+        self.has_2D = "2Density" in self.Loaded
+        self.has_1D = "1Density" in self.Loaded
+
+        if self.has_2D:
+            self.density_2d = self.Loaded["2Density"]
+            self.phi_2d = self.Loaded["2Grav"]
+
+        if self.has_1D:
+            self.density_1d = self.Loaded["1Density"]
+            self.phi1d_filtered = self.Loaded["1Grav"]
+
+        self.nbody = np.array(self.Loaded["NBody"])
+        #self.grad = np.array(self.Loaded["DF"])
+        #self.center_of_mass = np.array(self.Loaded["ULDCOM"])
+
+        self.Loaded = {}
+        self._apply_unit_conversions()
+
+    def _apply_unit_conversions(self):
+        CB = self.convert_between
+        ToPhys = self.convert_back
+
+        self.duration_Myr = CB(self.duration, self.duration_units, "Myr", "t")
+        self.length_kpc = CB(self.length, self.length_units, "kpc", "l")
+        self.length_code = self.convert(self.length, self.length_units, "l")
+
+        # Pre-multipliers
+        self.time_array = np.arange(self.EndNum) * self.duration_Myr / (self.save_number + 1)
+
+        self.XPre = ToPhys(1, 'kpc', 'l')
+        self.VPre = ToPhys(1, 'km/s', 'v')
+        self.XPreSI = ToPhys(1, 'm', 'l')
+        self.VPreSI = ToPhys(1, 'm/s', 'v')
+        
+        self.EPre = self.Universe.energy_unit
+
+        IArray = np.arange(len(self.nbody[0]))
+        self.nbody_S = self.nbody.copy()
+        self.nbody_S[:, IArray % 6 <= 2] *= self.XPre
+        self.nbody_S[:, IArray % 6 >= 3] *= self.VPre
+
+        self.nbody_SI = self.nbody.copy()
+        self.nbody_SI[:, IArray % 6 <= 2] *= self.XPreSI
+        self.nbody_SI[:, IArray % 6 >= 3] *= self.VPreSI
+
+    def get_mass_list(self, unit="M_solar_masses"):
+        CB = self.convert_between
+        unit_type = 'm'
+        return [CB(m[0], self.config.BlackHole["MatterParticles"]["MassUnits"], unit, unit_type) for m in self.particles]

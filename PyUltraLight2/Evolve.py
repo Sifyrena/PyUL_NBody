@@ -89,6 +89,10 @@ def Evolve(config_or_path, Silent = False, Message = '', **kwargs):
 
     try:
         os.mkdir(str(loc))
+    except:
+        print("Save Path Exists, Continuing.")    
+    
+    try:
         os.mkdir(str(loc + '/Outputs'))
         
     except(FileExistsError):
@@ -108,8 +112,10 @@ def Evolve(config_or_path, Silent = False, Message = '', **kwargs):
             
             print('Pre-existing Output files removed.')
             
-            shutil.rmtree(str(loc + '/Outputs'))
-            os.mkdir(str(loc + '/Outputs'))
+            try:
+                shutil.rmtree(str(loc + '/Outputs'))
+            finally:
+                os.mkdir(str(loc + '/Outputs'))
             
         else:
             return loc
@@ -794,17 +800,17 @@ def Evolve(config_or_path, Silent = False, Message = '', **kwargs):
         clear_output()
         print(f"{D_version}\nMessage: {Message}")
         
-    printU(f"Simulation name is {loc}",'Runtime', ToFile= GenerateLog, FilePath= LogLocation)
-    printU(f"{resol} Resolution for {duration:.4g}{duration_units}",'Runtime', ToFile= GenerateLog, FilePath= LogLocation)
-    printU(f"Simulation Started at {tBeginDisp}.",'Runtime', ToFile= GenerateLog, FilePath= LogLocation)
+    printU(f"Simulation name is {loc}",'Run', ToFile= GenerateLog, FilePath= LogLocation)
+    printU(f"{resol} Resolution for {duration:.4g}{duration_units or ' Code Time Units'}",'Run', ToFile= GenerateLog, FilePath= LogLocation)
+    printU(f"Simulation Started at {tBeginDisp}.",'Run', ToFile= GenerateLog, FilePath= LogLocation)
             
     HaSt = 1  # 1 for a half step 0 for a full step
 
     tenth = float(save_number/10) #This parameter is used if energy outputs are saved while code is running.
     if actual_num_steps == save_number:
-        printU(f"Taking {int(actual_num_steps)} ULDM steps", 'Runtime', ToFile= GenerateLog, FilePath= LogLocation)
+        printU(f"Taking {int(actual_num_steps)} ULDM steps", 'Run', ToFile= GenerateLog, FilePath= LogLocation)
     else:
-        printU(f"Taking {int(actual_num_steps)} ULDM steps @ {save_number} snapshots", 'Runtime', ToFile= GenerateLog, FilePath= LogLocation)
+        printU(f"Taking {int(actual_num_steps)} ULDM steps @ {save_number} snapshots", 'Run', ToFile= GenerateLog, FilePath= LogLocation)
     
 
     tinit = time.time()
@@ -826,7 +832,7 @@ def Evolve(config_or_path, Silent = False, Message = '', **kwargs):
             psi = ne.evaluate("exp(-1j*h*phi)*psi")
         
         if SelfInt:
-            psi = ne.evaluate("exp(-1j*h*Lambda_hat*rho)*psi")
+            psi = ne.evaluate("exp(-1j*h*lambda_hat*rho)*psi")
         
         funct = fft_psi(psi)
             
@@ -982,7 +988,7 @@ def Evolve(config_or_path, Silent = False, Message = '', **kwargs):
             psi = ne.evaluate("exp(-1j*0.5*h*phi)*psi")
             
             if SelfInt:
-                psi = ne.evaluate("exp(-1j*h*Lambda_hat*rho)*psi")
+                psi = ne.evaluate("exp(-1j*h*lambda_hat*rho)*psi")
                 
             rho = ne.evaluate("abs(abs(psi)**2)")
             HaSt = 1
@@ -1100,7 +1106,7 @@ def Evolve(config_or_path, Silent = False, Message = '', **kwargs):
     Time %= 60
     seconds = Time
     print('\n')
-    printU(f"Run Complete. Time Elapsed (d:h:m:s): {day:.0f}:{hour:.0f}:{minutes:.0f}:{seconds:.2f}",'Runtime', ToFile= GenerateLog, FilePath= LogLocation)
+    printU(f"Run Complete. Time Elapsed (d:h:m:s): {day:.0f}:{hour:.0f}:{minutes:.0f}:{seconds:.2f}",'Run', ToFile= GenerateLog, FilePath= LogLocation)
 
     if DumpFinal:
         printU(f'Dumped final state to file.','IO', ToFile= GenerateLog, FilePath= LogLocation)
