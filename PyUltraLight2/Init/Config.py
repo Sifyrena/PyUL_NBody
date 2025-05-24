@@ -162,18 +162,16 @@ class Config:
             self.__dict__.update(data)
             
     def ULDStepEst(self,save_number = -1):
-        
+        import numpy as np
         duration = self.Time["TimeDuration"]
         duration_units = self.Time["TimeUnits"]
-
-        length = self.Sim["Length"]
-        length_units = self.Sim["LengthUnits"]
-
-        resol = self.Sim["Resolution"]  # or self.Sim["Resolution"], depending on your config
+        length = self.Space["Box"]["BoxLength"]
+        length_units = self.Space["Box"]["LengthUnits"]
+        resol = self.Space["Resolution"]  
         step_factor = self.Time["StepFactor"]
         
         from PyUltraLight2.Universe.Universe import ULDMUniverse
-        self.Universe = ULDMUniverse(m22)
+        self.Universe = ULDMUniverse(self.uldm["m22"])
         self.axion_E = self.Universe.axion_E
         self.length_unit = self.Universe.length_unit
         self.mass_unit = self.Universe.mass_unit
