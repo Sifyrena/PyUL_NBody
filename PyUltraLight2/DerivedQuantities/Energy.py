@@ -1,7 +1,7 @@
 import numpy as np
 import numexpr as ne
 
-def calculate_energies(rho, Vcell, phiSP,phiTM, psi, karray2, fft_psi, ifft_funct, Density,Uniform, egpcmlist, egpsilist, ekandqlist, egylist, mtotlist, resol, save_grid_E = False):
+def calculate_energies(rho, Vcell, phiSP,phiTM, psi, karray2, fft_psi, ifft_funct, Density,Uniform, egpcmlist, egpsilist, ekandqlist, egylist, mtotlist, resol, save_grid_E = False, SelfInt = False, lambda_hat = 0):
 
     rho = rho.real
     
@@ -19,6 +19,8 @@ def calculate_energies(rho, Vcell, phiSP,phiTM, psi, karray2, fft_psi, ifft_func
 
     # Gravitational potential energy density of self-interaction of the condensate
     ESI = ne.evaluate('0.5*(phiSP)*(rho-BoxAvg)') # New!
+    if SelfInt:
+        ESI += ne.evaluate('0.5*lambda_hat*(rho-BoxAvg)**2')
     ESItot = Vcell * np.sum(ESI)
     egpsilist.append(ESItot)
     

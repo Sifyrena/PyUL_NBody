@@ -6,7 +6,7 @@
         "Number": 150
     },
     "Time": {
-        "TimeDuration": 2,
+        "TimeDuration": 1.6,
         "StartTime": 0,
         "TimeUnits": "",
         "RKSteps": 32,

@@ -719,7 +719,7 @@ def Evolve(config_or_path, Silent = False, Message = '', **kwargs):
         
         
 
-        ETotP, EKQP, ESIP = calculate_energies(rho, Vcell, phiSP,phiTM, psi, karray2, fft_psi, ifft_funct, Density,Uniform, egpcmlist, egpsilist, ekandqlist, egylist, mtotlist, resol, (save_options[22] or save_options[23] or save_options[24]))
+        ETotP, EKQP, ESIP = calculate_energies(rho, Vcell, phiSP,phiTM, psi, karray2, fft_psi, ifft_funct, Density,Uniform, egpcmlist, egpsilist, ekandqlist, egylist, mtotlist, resol, (save_options[22] or save_options[23] or save_options[24]), SelfInt = SelfInt, lambda_hat = lambda_hat)
     
         if save_options[22]:
             IOSave(loc,'2EnergyTot',0,save_format,ETotP)
@@ -826,13 +826,14 @@ def Evolve(config_or_path, Silent = False, Message = '', **kwargs):
               
         if HaSt == 1:
             psi = ne.evaluate("exp(-1j*0.5*h*phi)*psi")
+            if SelfInt:
+                psi = ne.evaluate("exp(-1j*0.5*h*lambda_hat*rho)*psi")
             HaSt = 0
 
         else:
             psi = ne.evaluate("exp(-1j*h*phi)*psi")
-        
-        if SelfInt:
-            psi = ne.evaluate("exp(-1j*h*lambda_hat*rho)*psi")
+            if SelfInt: # This version respects the half-stepping while the Vienna version did not.
+                psi = ne.evaluate("exp(-1j*h*lambda_hat*rho)*psi")
         
         funct = fft_psi(psi)
             
@@ -988,7 +989,7 @@ def Evolve(config_or_path, Silent = False, Message = '', **kwargs):
             psi = ne.evaluate("exp(-1j*0.5*h*phi)*psi")
             
             if SelfInt:
-                psi = ne.evaluate("exp(-1j*h*lambda_hat*rho)*psi")
+                psi = ne.evaluate("exp(-1j*0.5*h*lambda_hat*rho)*psi")
                 
             rho = ne.evaluate("abs(abs(psi)**2)")
             HaSt = 1
@@ -997,7 +998,7 @@ def Evolve(config_or_path, Silent = False, Message = '', **kwargs):
             #Next block calculates the energies at each save, not at each timestep.
             if (save_options[3]):
     
-                ETotP, EKQP, ESIP = calculate_energies(rho, Vcell, phiSP,phiTM, psi, karray2, fft_psi, ifft_funct, Density,Uniform, egpcmlist, egpsilist, ekandqlist, egylist, mtotlist, resol, (save_options[22] or save_options[23] or save_options[24]))
+                ETotP, EKQP, ESIP = calculate_energies(rho, Vcell, phiSP,phiTM, psi, karray2, fft_psi, ifft_funct, Density,Uniform, egpcmlist, egpsilist, ekandqlist, egylist, mtotlist, resol, (save_options[22] or save_options[23] or save_options[24]), SelfInt = SelfInt, lambda_hat = lambda_hat)
 
                 if save_options[22]:
                     IOSave(loc,'2EnergyTot',int((ix + 1) / its_per_save),save_format,ETotP)
