@@ -541,6 +541,9 @@ def Evolve(config_or_path, Silent = False, Message = '', **kwargs):
     # SETUP PADDED POTENTIAL HERE (From Luna)
     
     if IsoP:
+        
+        
+        from .Integration.isolated_potential import safeInverse3D, greenArray, makeDCTGreen,  makeEvenArray, planeConvolve, isolatedPotential, planeConvolveSP, isolatedPotentialSP
         rhopad = pyfftw.zeros_aligned((2*resol, resol, resol), dtype='complex128')
         bigplane = pyfftw.zeros_aligned((2*resol, 2*resol), dtype='complex128')
 
@@ -613,7 +616,7 @@ def Evolve(config_or_path, Silent = False, Message = '', **kwargs):
             np.save(f'./Green Functions/G{resol}.npy',green)
             
         #green = makeEvenArray(green)
-        phiSP = IP_jit(rho, green, lengthC, fft_X, ifft_X, fft_plane, ifft_plane, resol, ndx)
+        phiSP = isolatedPotentialSP(rho, green, lengthC, fft_X, ifft_X, fft_plane, ifft_plane, resol, ndx)
         
     else:
         printU(f"Poisson Equation Solved Using FFT.",'SP', ToFile= GenerateLog, FilePath= LogLocation)
@@ -930,7 +933,7 @@ def Evolve(config_or_path, Silent = False, Message = '', **kwargs):
         if not IsoP:
             phiSP = irfft_phi(phik)
         else:
-            phiSP = IP_jit(rho, green, lengthC, fft_X, ifft_X, fft_plane, ifft_plane, resol, ndx)
+            phiSP = isolatedPotentialSP(rho, green, lengthC, fft_X, ifft_X, fft_plane, ifft_plane, resol, ndx)
             
         phiSP += ExtPhi # New Handle
 

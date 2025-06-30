@@ -5,6 +5,8 @@
 ####################### PADDED POTENTIAL FUNCTIONS
 
 #safeInverse
+import numpy as np
+import numexpr as ne
 
 def safeInverse3D(x):
     # Safe inverse for 3D arrays
@@ -29,7 +31,7 @@ def greenArray(xyz):
 
 # makeDCTGreen
 
-def makeDCTGreen(n):
+def makeDCTGreen(n, num_threads = 8):
     # make Green's function using a DCT
     x2 = np.arange(0, n + 1)**2
     arr = greenArray(x2)
@@ -122,7 +124,7 @@ def isolatedPotentialSP(rho, green, l, fft_X, ifft_X, fft_plane, ifft_plane, res
     # loop
     for i in range(0,2*n):
         plane = rhopad[i, :, :]
-        rhopad[i, :, :] = PC_jit(green[ndx[i], :, :], plane, n, fft_plane, ifft_plane)
+        rhopad[i, :, :] = planeConvolveSP(green[ndx[i], :, :], plane, n, fft_plane, ifft_plane)
     # - - - - - - - - - - - - - - - - - - - - - -    
     #rhopad = (1/n**2) * scipy.fftpack.ifftn(rhopad, axes = (0,)) #inverse transform x-axis
     rhopad = (1/n**2) * ifft_X(rhopad) # normalization

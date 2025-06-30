@@ -11,3 +11,8 @@
 *.pyc
 *.icloud
 /SIDemo
+*.h5
+Init_MMA_0.05(1,0,0)_50_256_psi.npy
+/PyUltraLight2/Universe/.ipynb_checkpoints
+/PyUltraLight2/Utils/.ipynb_checkpoints
+Sca_psi.npy

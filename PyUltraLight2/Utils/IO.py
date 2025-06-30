@@ -525,15 +525,15 @@ class Data:
         self.VPreSI = ToPhys(1, 'm/s', 'v')
         
         self.EPre = self.Universe.energy_unit
+        if len(self.nbody[0]) != 0:
+            IArray = np.arange(len(self.nbody[0]))
+            self.nbody_S = self.nbody.copy()
+            self.nbody_S[:, IArray % 6 <= 2] *= self.XPre
+            self.nbody_S[:, IArray % 6 >= 3] *= self.VPre
 
-        IArray = np.arange(len(self.nbody[0]))
-        self.nbody_S = self.nbody.copy()
-        self.nbody_S[:, IArray % 6 <= 2] *= self.XPre
-        self.nbody_S[:, IArray % 6 >= 3] *= self.VPre
-
-        self.nbody_SI = self.nbody.copy()
-        self.nbody_SI[:, IArray % 6 <= 2] *= self.XPreSI
-        self.nbody_SI[:, IArray % 6 >= 3] *= self.VPreSI
+            self.nbody_SI = self.nbody.copy()
+            self.nbody_SI[:, IArray % 6 <= 2] *= self.XPreSI
+            self.nbody_SI[:, IArray % 6 >= 3] *= self.VPreSI
 
     def get_mass_list(self, unit="M_solar_masses"):
         CB = self.convert_between
