@@ -2,35 +2,39 @@
 
 import numpy as np
 import astropy.units as u
-from astropy.constants import c, G, hbar, M_sun
+# from astropy.constants import c, G, hbar
+
+
+c = 299752468 
+
+G = 6.67e-11  # kg
+
+hbar = 1.0545718e-34  # m^2 kg/s
 
 pi = np.pi
 
-# Electron volt in SI units (energy)
-eV = u.eV  # Already defined in astropy.units
+eV = 1.78266191e-36 # kg*c^2se
 
-parsec = u.pc  # astropy handles this automatically
-light_year = u.lyr
+hbar = 1.0545718e-34  # m^2 kg/s
 
-# Solar mass
-solar_mass = M_sun  # from astropy.constants
+parsec = 3.0857e16  # m
 
-# Cosmological parameters
+light_year = 9.4607e15  # m
+
+solar_mass = 1.989e30  # kg
+
 omega_m0 = 0.31
-H_0 = 67.7 * u.km / u.s / u.Mpc  # Hubble constant in standard cosmology units
 
-# Convert H_0 to SI units (1/s)
-#H_0 = H_0_value.to(1 / u.s)
+H_0 = 67.7 / (parsec * 1e3)  # s^-1
 
-# Critical density
-CritDens = (3 * H_0**2 / (8 * pi * G))
+CritDens = 3*H_0**2/(8*pi*G)
+# IMPORTANT
 
-# Define your custom time unit (still in SI)
-time_unit = ((3 * H_0**2 * omega_m0 / (8 * pi))**-0.5)
+time_unit = (3 * H_0 ** 2 * omega_m0 / (8 * pi)) ** -0.5 # Independent of Axion Mass
 
 # ULDM:
 
-m22eV = 1e-22 * eV  # Default value
+m22eV = 1e-22  # Default value
 
 class ULDMUniverse():
 
@@ -38,7 +42,7 @@ class ULDMUniverse():
     
         self.m22 = mass
         self.axion_E = mass * m22eV
-        self.axion_mass = self.axion_E / c **2
+        self.axion_mass = self.axion_E * eV
         
         self.time_unit = time_unit
         self.length_unit = (8 * pi * hbar ** 2 / (3 * self.axion_mass ** 2 * H_0 ** 2 * omega_m0)) ** 0.25

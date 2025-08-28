@@ -38,7 +38,7 @@ from PyUltraLight2.Init.Solitons import InitSolitonF
 def __call__():
     return Evolve()
 
-def Evolve(config_or_path, Silent = False, Message = '', **kwargs):
+def Evolve(config_or_path, Silent = False, Message = '', Additional_Psi = None, **kwargs):
     # IDEAL USE CASE: like the Nyx-family, from command line on its own.
     """
     - config_or_path: Config object or str
@@ -70,7 +70,10 @@ def Evolve(config_or_path, Silent = False, Message = '', **kwargs):
         if key == "CenterCalc":
             printU(f"Setting COM Evaluation to {value}.", "Init")
             config.ADVANCED["CenterCalc"] = value
-
+        
+        if key == "duration":
+            printU(f"Updating duration to {value}", "Init")
+            config.Time["TimeDuration"] = value
 
 
         if hasattr(config, key):
@@ -83,7 +86,7 @@ def Evolve(config_or_path, Silent = False, Message = '', **kwargs):
     if config.Saving["Loc"] != "./":
         loc = config.Saving["Loc"]
     else:
-        loc = f"./Simulations/{GenFromTime()}"
+        loc = f"./Simulations/{config.RunSignature()}_{GenFromTime()}"
 
     # IO
 
@@ -405,6 +408,13 @@ def Evolve(config_or_path, Silent = False, Message = '', **kwargs):
         ThresholdVelocity = 0
 
     DensityCom = MassCom / resol**3
+    
+    
+    if Additional_Psi is not None:
+        printU(f"Added a perturbation in wavefunction.",'Init', ToFile= GenerateLog, FilePath= LogLocation)
+        psi = ne.evaluate("psi + Additional_Psi")
+        
+    
     
     if Uniform:
         print('========================Uniform Background====================================')

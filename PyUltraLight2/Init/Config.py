@@ -203,3 +203,25 @@ class Config:
         #print(f'The actual ULDM steps is {MinUS}')
         
         return MinUS
+    
+    def RunSignature(self):
+        """
+        Returns a string summarizing the run:
+        axion mass (m22), box length, duration, and resolution.
+        Example:
+            "m22=1.0, Box=1 [LengthUnits], Duration=10 [TimeUnits] @ 256^3"
+        """
+        m22 = self.uldm.get("m22", "UNKNOWN")
+        box = self.Space["Box"].get("BoxLength", "UNKNOWN")
+        box_units = self.Space["Box"].get("LengthUnits", "")
+        dur = self.Time.get("TimeDuration", "UNKNOWN")
+        dur_units = self.Time.get("TimeUnits", "")
+        res = self.Space.get("Resolution", "UNKNOWN")
+        
+        Lambda = self.uldm.get("LHat","0")
+        
+        if Lambda!=0:
+            sig = f"M{m22}_Λ{Lambda}_L{box}{box_units}_T{dur}{dur_units}@{res}"
+        else:
+            sig = f"M{m22}_L{box}{box_units}_T{dur}{dur_units}@{res}"
+        return sig
