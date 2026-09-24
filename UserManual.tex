@@ -1,0 +1,528 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{hyperref}
+\usepackage{parskip}
+\usepackage{graphicx}
+
+\title{PyUltraLight2 (BHPaper) --- User Manual}
+\author{Auckland Cosmology Group}
+\date{Version 3.0.0 ``First Light'' --- \today}
+
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\field}[1]{\texttt{#1}}
+
+\begin{document}
+\maketitle
+
+\begin{center}
+  \includegraphics[width=0.7\textwidth]{PyULLogo_banner.png}
+\end{center}
+
+\tableofcontents
+
+\section{Overview}
+
+PyUltraLight2 (this fork: \emph{BHPaper}) evolves the Schr\"odinger--Poisson
+system for Ultralight/Fuzzy Dark Matter (ULDM/FDM),
+\begin{align}
+  i\hbar\,\partial_t \psi &= \left[-\frac{\hbar^2}{2m}\nabla^2 + m\,\Phi\right]\psi, \\
+  \nabla^2 \Phi &= 4\pi G m\,|\psi|^2,
+\end{align}
+on a periodic (or isolated) FFT grid via operator splitting (kick--drift--kick),
+coupled to zero or more classical point-mass ``matter particles'' (black holes)
+via a Plummer-softened potential. This fork adds a moving-sink absorption
+mechanism so a black hole particle can accrete the surrounding ULDM: a local
+imaginary potential depletes $\psi$ near the particle, and the lost mass (and,
+optionally, momentum) is transferred onto the particle's own dynamical state.
+
+All physical quantities inside the simulation are expressed in \emph{code
+units} defined by the axion mass \field{m22} (Section~\ref{sec:units}). The
+public entry points are the \code{Config} class
+(\code{PyUltraLight2.Init.Config}) and the \code{Evolve()} function
+(\code{PyUltraLight2.Evolve}).
+
+\section{Installation and Dependencies}
+
+Pure-Python package, no build step. Runtime dependencies: \code{numpy},
+\code{pyfftw}, \code{numexpr}, \code{astropy} (unit constants only). Import as:
+\begin{verbatim}
+import PyUltraLight2 as PyUL
+\end{verbatim}
+or, for direct access to the pieces documented here:
+\begin{verbatim}
+from PyUltraLight2.Init.Config import Config
+from PyUltraLight2.Evolve import Evolve
+\end{verbatim}
+
+\section{Quick Start}
+
+\begin{verbatim}
+from PyUltraLight2.Init.Config import Config
+from PyUltraLight2.Evolve import Evolve
+
+config = Config()
+config.Space["Resolution"] = 64
+config.Time["TimeDuration"] = 1.0
+config.uldm["Solitons"]["Condition"] = [[10, [0, 0, 0], [0, 0, 0], 0]]
+config.BlackHole["MatterParticles"]["Condition"] = [
+    [0.05, [-0.2, 0, 0], [0.35, 0, 0]]
+]
+config.BlackHole["Sink"]["Flag"] = True
+config.BlackHole["Sink"]["Dynamic"] = True
+
+loc = Evolve(config, Silent=True)
+\end{verbatim}
+This runs a resolution-64 grid with one soliton and one black-hole particle
+that accretes ULDM via a dynamically-calibrated Bondi--Hoyle sink. Output is
+written under \code{loc} (see Section~\ref{sec:output}).
+
+A config can also be round-tripped to/from a JSON \code{.uldm} file:
+\begin{verbatim}
+config.ToFile("my_run.uldm")
+loc = Evolve("my_run.uldm")          # Evolve() also accepts a path string
+\end{verbatim}
+
+\section{The \code{Config} Object}
+\label{sec:config}
+
+\code{Config()} (in \code{PyUltraLight2.Init.Config}) populates its fields with
+defaults on construction; every field is a plain nested \code{dict} attribute,
+mutated directly (\code{config.Space["Resolution"] = 128}). Below, each
+top-level block is documented as a subsection.
+
+\subsection{\field{Saving}}
+\begin{description}
+  \item[\field{Loc}] (str, default \code{"./"}) Output directory. If left at
+    \code{"./"}, \code{Evolve()} auto-generates
+    \code{./Simulations/\{RunSignature\}\_\{timestamp\}}.
+  \item[\field{Flags}] (str, default \code{"Minimum"}) Space-separated save
+    flags; see Section~\ref{sec:saveflags}.
+  \item[\field{Format}] (str, default \code{"npy"}) On-disk array format.
+  \item[\field{Number}] (int, default \code{-1}) Number of snapshots to save;
+    \code{-1} means ``every integration step''.
+\end{description}
+
+\subsection{\field{Time}}
+\begin{description}
+  \item[\field{TimeDuration}] (float, default \code{1}) Simulation duration,
+    in \field{TimeUnits}.
+  \item[\field{StartTime}] (float, default \code{0}) Initial phase-evolution
+    offset for solitons only.
+  \item[\field{TimeUnits}] (str, default \code{""}) One of the time units in
+    Table~\ref{tab:units} (\code{""} = code units).
+  \item[\field{RKSteps}] (int, default \code{32}) RK4 sub-steps per outer ULDM
+    step for particle integration (\code{NBodyAdvance}); must be \code{0},
+    \code{1}, or a multiple of 4.
+  \item[\field{StepFactor}] (int, default \code{1}) Coarsens the outer ULDM
+    timestep by this factor.
+\end{description}
+
+\subsection{\field{Space}}
+\begin{description}
+  \item[\field{Resolution}] (int, default \code{256}) Grid points per axis
+    (cubic grid, $N^3$ total).
+  \item[\field{Box.BoxLength}] (float, default \code{1}) Box side length, in
+    \field{Box.LengthUnits}.
+  \item[\field{Box.LengthUnits}] (str, default \code{""}) One of the length
+    units in Table~\ref{tab:units}.
+\end{description}
+
+\subsection{\field{BlackHole}}
+\begin{description}
+  \item[\field{MatterParticles.Condition}] (list) List of particles, each
+    \code{[mass, [x,y,z], [vx,vy,vz]]} in \field{MassUnits} /
+    \field{PositionUnits} / \field{VelocityUnits}. A particle with
+    \code{mass == 0} is a passive observer (no gravity).
+  \item[\field{MatterParticles.MassUnits} / \field{PositionUnits} /
+    \field{VelocityUnits}] (str) Units for the list above.
+  \item[\field{MatterParticles.PlummerRadius}] (unused placeholder; see
+    \field{FieldSmoothing}).
+  \item[\field{FieldSmoothing}] (float or \code{"Auto"}, default
+    \code{"Auto"}) Plummer softening parameter $a$ (inverse length, code
+    units) used both for particle$\to$field deposition and particle-particle
+    gravity: $\Phi_{\rm TM}(r) = -a\,m/\sqrt{1+a^2r^2}$. \code{"Auto"} sets
+    $a = 2\,N/L$ (half a grid cell). A value $\geq 10^8$ disables softening
+    entirely.
+  \item[\field{Sink}] Moving absorption sink --- see Table~\ref{tab:sink}.
+\end{description}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}lll@{}}
+\toprule
+Field & Default & Meaning \\
+\midrule
+\field{Flag} & \code{False} & Enable the sink. \\
+\field{ParticleIdx} & \code{0} & Index into \field{MatterParticles.Condition} the sink follows. \\
+\field{Amplitude} & \code{0.0} & $V_0$ of the imaginary potential (code units). Ignored if \field{Dynamic}. \\
+\field{Radius} & \code{0.05} & Gaussian $\sigma$ of the sink (code length units). Ignored if \field{Dynamic}. \\
+\field{Feedback} & \code{True} & Add absorbed mass onto the particle's own mass. \\
+\field{Dynamic} & \code{False} & Recompute Amplitude/Radius every step via Bondi--Hoyle (Section~\ref{sec:sink}). \\
+\field{VFloor} & \code{0.05} & Minimum speed used in Dynamic calibration (code units). \\
+\field{RadiusCap} & \code{None} & Max Radius in Dynamic mode; defaults to $0.25\times$\field{BoxLength}. \\
+\field{ConserveMomentum} & \code{False} & Deposit absorbed momentum onto the particle's velocity. \\
+\bottomrule
+\end{tabular}
+\caption{\code{config.BlackHole["Sink"]} fields.}
+\label{tab:sink}
+\end{table}
+
+\subsection{\field{uldm}}
+\begin{description}
+  \item[\field{m22}] (float, default \code{1}) Axion mass in units of
+    $10^{-22}\,\mathrm{eV}$; sets every code unit (Section~\ref{sec:units}).
+  \item[\field{SI}] (bool, default \code{False}) Enable ULDM self-interaction
+    (quartic term).
+  \item[\field{LHat}] (float, default \code{0}) Self-interaction coupling
+    $\hat\lambda$, used when \field{SI} is \code{True}.
+  \item[\field{Solitons.Condition}] (list) List of solitons, each
+    \code{[mass, [x,y,z], [vx,vy,vz], phase]} (phase in units of $\pi$).
+  \item[\field{Solitons.Embedded}] (list) Embedded soliton profiles (advanced;
+    see \code{Init/Solitons.py}).
+  \item[\field{Solitons.MassUnits} / \field{PositionUnits} / \field{VelocityUnits}]
+    (str) Units for the list above.
+  \item[\field{Modifier.UniformFieldAddOn.Flag}] (bool, default \code{False})
+    Superpose a uniform background density.
+  \item[\field{Modifier.UniformFieldAddOn.DensityUnit} / \field{DensityValue} /
+    \field{UniformVelocity}] Background density and bulk velocity, when the
+    flag above is set. Note: a nonzero \field{UniformVelocity} needs
+    $vL$ to close periodically (a multiple of $2\pi$ in code units) or the
+    field develops a boundary discontinuity; prefer giving the \emph{particle}
+    the relative velocity instead of the field when possible.
+\end{description}
+
+\subsection{\field{INIT}}
+\begin{description}
+  \item[\field{DumpInit} / \field{DumpFinal}] (bool) Dump the full complex
+    wavefunction to \code{Init\_psi.npy} / \code{Final\_psi.npy}
+    (\field{DumpInit} also halts the run immediately after initialisation).
+  \item[\field{UseInit}] (bool) Load a previously-dumped wavefunction from
+    \field{InitPath} instead of (or blended with) the soliton/particle
+    initial conditions.
+  \item[\field{InitPath}] (str) Path (without \code{.npy}) to load from.
+  \item[\field{InitWeight}] (float, default \code{1}) Blend weight in
+    $[0,1]$, or \code{-1} to keep only the loaded phase.
+\end{description}
+
+\subsection{\field{BC}}
+\begin{description}
+  \item[\field{EdgeClear}] (bool) Zero $\psi$ back to background density on
+    the outermost \code{Resolution}$/16$ cells every step (crude absorbing
+    boundary).
+  \item[\field{IsoP}] (bool, default \code{False}) Use an isolated (zero-padded
+    Green's function) Poisson solve instead of the periodic FFT solve. Also
+    switches particle force interpolation away from periodic wraparound (see
+    Section~\ref{sec:nbody}).
+  \item[\field{DSponge}] (bool) Enable a dispersive sponge layer near the
+    boundary (damps $\psi$ smoothly in an outer shell).
+\end{description}
+
+\subsection{\field{SIM}}
+\begin{description}
+  \item[\field{SelfGravity}] (bool, default \code{True}) ULDM feels its own
+    gravity ($\Phi_{\rm SP}$).
+  \item[\field{NBodyInterp}] (bool, default \code{True}) Particles feel the
+    ULDM's gravity. If \code{False}, particles only feel each other.
+  \item[\field{NBodyGravity}] (bool, default \code{True}) ULDM feels the
+    particles' gravity ($\Phi_{\rm TM}$ added to the field). \emph{Note:} this
+    does \emph{not} disable direct particle--particle gravity, which always
+    runs inside \code{NBodyAdvance} regardless of this flag.
+\end{description}
+
+\subsection{\field{LEGACY}, \field{IO}, \field{RUNTIME}}
+\begin{description}
+  \item[\field{LEGACY.Shift} / \field{NLM}] Unused; retained for config-file
+    compatibility with older runs.
+  \item[\field{LEGACY.DR}] (float, default \code{1}) Soliton profile scale
+    factor passed to \code{InitSolitonF}.
+  \item[\field{IO.Stream} / \field{StreamChar}] (bool / list) Stream selected
+    \code{TMState} components to a side file every RK sub-step.
+  \item[\field{RUNTIME.GenerateLog}] (bool, default \code{True}) Mirror console
+    output to \code{evolve.log} in the run directory.
+\end{description}
+
+\subsection{\field{ADVANCED}}
+\begin{description}
+  \item[\field{CenterCalc}] (bool) Track and log the ULDM density's
+    centre-of-mass every step; also drives 3D resampling around the COM when
+    the corresponding save flags are set.
+  \item[\field{ComputeQuad}] (bool) Reserved; the quadrupole computation this
+    once triggered was removed as dead code (undefined function).
+  \item[\field{ExtPhi}] (default \code{0}) Static external potential. Accepts
+    an \code{ndarray} matching the grid shape, a path to a saved \code{.npy}
+    array, a callable \code{f(x,y,z)} (evaluated once) or \code{f(x,y,z,t)}
+    (time-dependent; evaluated at $t=0$ only at present), or \code{0}/\code{None}
+    for none. A nonzero \emph{imaginary} part acts as a static absorbing
+    potential, applied every step as $\psi \mathrel{*}= e^{-h\,\mathrm{Im}(\Phi_E)}$
+    --- distinct from, and independent of, the moving \field{Sink} mechanism.
+\end{description}
+
+\subsection{\field{SAMPLING}}
+\begin{description}
+  \item[\field{Length\_Ratio}] (float, default \code{0.5}) Size of the
+    resampled sub-box, as a fraction of the full box, when
+    \field{ADVANCED.CenterCalc} is set.
+  \item[\field{resolR}] (int, default \code{64}) Resolution of the resampled
+    sub-box.
+\end{description}
+
+\subsection{\field{EXTRAS}}
+\begin{description}
+  \item[\field{PrintEK}] (bool) Reserved for kinetic-energy delta printouts.
+  \item[\field{MassChange}] (bool) Scale particle mass over time via
+    \field{MassFunc}. \emph{Not compatible with} \field{Sink.Feedback}: both
+    write \code{masslist[i]} each step and will clobber each other.
+  \item[\field{MassFunc}] (str) Source of a function \code{f(t) -> multiplier},
+    used when \field{MassChange} is set.
+  \item[\field{CorrectDrift}] (bool) Periodically null out bulk drift velocity
+    inferred from the ULDM centre-of-mass.
+  \item[\field{CorrectFreq}] (int, default \code{6}) Steps between
+    \field{CorrectDrift} corrections.
+\end{description}
+
+\subsection{\field{SPECIAL\_HALTING\_CONDITIONS}}
+\begin{description}
+  \item[\field{AutoStop}] (bool) Halt when a single test particle's velocity
+    crosses zero relative to a uniform background (used for scattering-angle
+    experiments).
+  \item[\field{AutoStop2}] (bool) Halt when the minimum potential exceeds
+    \field{WellThreshold} times its initial value (runaway-collapse guard).
+  \item[\field{AutoStop3}] Reserved, unused.
+  \item[\field{KEThreshold}] (float, default \code{0.9}) Reserved.
+  \item[\field{WellThreshold}] (float, default \code{100}) See \field{AutoStop2}.
+\end{description}
+
+\subsection{Methods}
+\begin{description}
+  \item[\code{config.ToFile(path)}] Serialise to JSON (\code{.uldm}).
+  \item[\code{config.FromFile(path)}] Load from JSON, overwriting all fields.
+  \item[\code{config.ULDStepEst(save\_number=-1)}] Estimate the number of
+    integration steps a run will take, without running it.
+  \item[\code{config.RunSignature()}] Human-readable run label
+    (\code{"M\{m22\}\_L\{box\}\{units\}\_T\{dur\}\{units\}@\{res\}"}), used to
+    auto-name the output directory.
+\end{description}
+
+\section{Units}
+\label{sec:units}
+
+All code units are derived from the axion mass \field{m22} (in units of
+$10^{-22}\,\mathrm{eV}$) via \code{ULDMUniverse} (\code{Universe/Universe.py}).
+Passing \code{""} as a unit string means ``already in code units''.
+Table~\ref{tab:units} lists the recognised physical units per conversion
+type, used via \code{convert(value, unit, type)} /
+\code{convert\_back(value, unit, type)}.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}lll@{}}
+\toprule
+Type code & Quantity & Recognised units \\
+\midrule
+\code{l} & length & \code{m}, \code{km}, \code{pc}, \code{kpc}, \code{Mpc}, \code{ly}, \code{SI} \\
+\code{m} & mass & \code{kg}, \code{solar\_masses}, \code{M\_solar\_masses}$^*$, \code{SI} \\
+\code{t} & time & \code{s}, \code{yr}, \code{kyr}, \code{Myr}, \code{Gyr}, \code{SI} \\
+\code{v} & velocity & \code{m/s}, \code{km/s}, \code{km/h}, \code{c}, \code{SI} \\
+\code{d} & density & \code{Crit}, \code{MSol/pc3}, \code{MMSol/kpc3}, \code{kg/m3}, \code{SI} \\
+\code{a} & acceleration & \code{m/s2}, \code{SI} \\
+\code{p} & momentum & \code{kgm/s}, \code{Nr}, \code{SI} \\
+\bottomrule
+\end{tabular}
+\caption{Unit strings accepted by \code{convert}/\code{convert\_back}.
+$^*$\code{M\_solar\_masses} = $10^6\,M_\odot$ (mega-solar-masses), \emph{not}
+one solar mass.}
+\label{tab:units}
+\end{table}
+
+\section{\code{Evolve()}}
+\label{sec:evolve}
+
+\begin{verbatim}
+Evolve(config_or_path, Silent=False, Message='', Additional_Psi=None, **kwargs)
+\end{verbatim}
+\begin{description}
+  \item[\field{config\_or\_path}] A \code{Config} instance, or a path string
+    (loaded via \code{Config().FromFile}).
+  \item[\field{Silent}] (bool) Suppress interactive prompts (auto-overwrite an
+    existing output folder) and some console output.
+  \item[\field{Message}] (str) Printed banner message at run start.
+  \item[\field{Additional\_Psi}] (ndarray or \code{None}) Added onto the
+    initial $\psi$ before the main loop, after solitons/particles/uniform
+    background are constructed.
+  \item[\field{**kwargs}] Config overrides applied before the run. Recognised
+    shorthands: \field{Saving\_Loc}, \field{DSponge}, \field{IsoP},
+    \field{CenterCalc}, \field{duration} (map onto the corresponding
+    \code{Config} fields). Any other keyword either overrides an existing
+    top-level \code{Config} attribute (if the name matches one) or is set as a
+    new attribute on the \code{Config} instance.
+\end{description}
+Returns the output directory path (str). Side effect: writes the full
+directory tree described in Section~\ref{sec:output}, including a snapshot of
+the resolved config to \code{config.uldm} inside it.
+
+\section{Save Flags}
+\label{sec:saveflags}
+
+\field{Saving.Flags} is a space-separated string of flags from
+Table~\ref{tab:saveflags}. The shorthand \code{"Minimum"} expands to
+\code{"Energy 1Density NBody 1GravF"}.
+
+\begin{longtable}{@{}lll@{}}
+\toprule
+Flag & Output dir/prefix & Description \\
+\midrule
+\endhead
+\field{3Density} & \code{R3D} & Full 3D density field $|\psi|^2$ \\
+\field{3Wfn} & \code{P3D} & Full 3D complex wavefunction $\psi$ \\
+\field{2Density} & \code{R2D} & Density, xy mid-plane slice \\
+\field{Energy} & \code{EGY} & Global energy components (KQ, SI, TM) \\
+\field{1Density} & \code{R1D} & Density, y-axis line through centre \\
+\field{NBody} & \code{NTM} & N-body state (position, velocity) \\
+\field{3Grav} & \code{G3D} & Full 3D self-gravity potential $\Phi_{\rm SP}$ \\
+\field{2Grav} & \code{G2D} & Self-gravity, xy mid-plane slice \\
+\field{DF} & \code{DYF} & Dynamical friction gradient log \\
+\field{2Phase} & \code{A2D} & Phase $\arg(\psi)$, xy mid-plane slice \\
+\field{Entropy} & \code{ENT} & Global $-\int \rho \ln \rho\,dV$ \\
+\field{1Grav} & \code{G1D} & Self-gravity, y-axis line \\
+\field{3GravF} & \code{F3D} & Full 3D total potential $\Phi_{\rm SP}+\Phi_{\rm TM}$ \\
+\field{2GravF} & \code{F2D} & Total potential, xy mid-plane slice \\
+\field{1GravF} & \code{F1D} & Total potential, y-axis line \\
+\field{3DensityRS} & \code{R3R} & Subsampled 3D density around COM \\
+\field{3WfnRS} & \code{P3R} & Subsampled 3D wavefunction around COM \\
+\field{2EnergyTot} & \code{E2T} & Energy density, xy mid-plane slice \\
+\field{2EnergyKQ} & \code{E2K} & Kinetic-quantum energy density slice \\
+\field{2EnergySI} & \code{E2G} & Self-interaction energy density slice \\
+\field{ULDCOM} & \code{UCM} & ULDM centre-of-mass position \\
+\field{2DensityRS} & \code{R2R} & Subsampled density, 2D slice \\
+\bottomrule
+\caption{Recognised \field{Saving.Flags} tokens.}
+\label{tab:saveflags}
+\end{longtable}
+
+\section{Output Directory Reference}
+\label{sec:output}
+
+Given output directory \code{loc} (returned by \code{Evolve()}):
+\begin{description}
+  \item[\code{loc/config.uldm}] The resolved \code{Config}, as JSON.
+  \item[\code{loc/evolve.log}] Console log (if \field{RUNTIME.GenerateLog}).
+  \item[\code{loc/Outputs/\{DIRNAME\}/}] One subdirectory per requested save
+    flag (Table~\ref{tab:saveflags}), containing numbered
+    \code{\{DIRNAME\}\_\#NNN.npy} snapshots.
+  \item[\code{loc/Outputs/ULDMass.npy}] Total ULDM mass on the grid
+    ($V_{\rm cell}\sum\rho$) at every save point. Always written.
+  \item[\code{loc/Outputs/BHMass.npy}] The sink particle's mass at every save
+    point, only when \field{Sink.Flag} is set.
+  \item[\code{loc/Outputs/egylist.npy}, \code{egpcmlist.npy},
+    \code{egpcmMlist.npy}, \code{egpsilist.npy}, \code{ekandqlist.npy},
+    \code{masseslist.npy}] Energy bookkeeping time series, only when
+    \field{Energy} is in \field{Saving.Flags}.
+  \item[\code{loc/Outputs/Entro.npy}] Entropy time series, only when
+    \field{Entropy} is in \field{Saving.Flags}.
+  \item[\code{loc/Init\_psi.npy}, \code{loc/Final\_psi.npy}] Full complex
+    wavefunction dumps, only when \field{INIT.DumpInit} /
+    \field{INIT.DumpFinal} are set.
+  \item[\code{loc/StoppingTime.uldm}] Written when \field{AutoStop} triggers
+    (or \code{-1} if it never did).
+\end{description}
+
+\section{N-Body / FDM Coupling}
+\label{sec:nbody}
+
+Particle motion is integrated by \code{PyUltraLight2.Integration.NBodyAdvance}:
+\begin{verbatim}
+NBodyAdvance(TMState, h, masslist, phiSP, smoothing, lengthC, resol, NS,
+             loc='', Stream=False, StreamChar='', Periodic=True)
+\end{verbatim}
+which RK4-subcycles (\field{Time.RKSteps} sub-steps) the ODE
+\begin{equation}
+  \ddot{\mathbf r}_i = -\nabla\Phi_{\rm SP}(\mathbf r_i)
+    - \sum_{j\neq i} m_j \nabla\left[-\frac{a\,m_j}{\sqrt{1+a^2 r_{ij}^2}}\right],
+\end{equation}
+using $\Phi_{\rm SP}$ frozen at the value from the start of the current outer
+ULDM step. The gradient of $\Phi_{\rm SP}$ is sampled by 2nd-order finite
+difference on the grid plus trilinear interpolation. \field{Periodic}
+(\code{= not config.BC.IsoP}, set automatically by \code{Evolve()}) selects
+whether the local force-sampling stencil wraps periodically across the box
+boundary (the periodic Poisson-solve case) or, for an isolated potential,
+falls back to a zero gradient within two grid cells of any face.
+
+\section{BH Absorption Sink API}
+\label{sec:sink}
+
+Implemented in \code{PyUltraLight2.Particles.Accretion}, called once per
+step from \code{Evolve()} (after the particle's position is advanced for that
+step) when \field{Sink.Flag} is set.
+
+\begin{verbatim}
+ApplySink(psi, rho, TMState, masslist, SinkIdx, SinkAmplitude, SinkRadius,
+          xarray, yarray, zarray, h, Vcell, Feedback=True,
+          Dynamic=False, VFloor=0.05, RadiusCap=None,
+          ConserveMomentum=False, kxarray=None, kyarray=None, kzarray=None)
+    -> (psi, rho, masslist)
+\end{verbatim}
+
+Centred on the sink particle's current position $\mathbf r_0$, a Gaussian
+imaginary potential
+\begin{equation}
+  V_{\rm sink}(\mathbf r) = A\,\exp\!\left(-\frac{|\mathbf r-\mathbf r_0|^2}{2R^2}\right)
+\end{equation}
+is applied as $\psi \mathrel{*}= \exp(-h\,V_{\rm sink})$. When
+\field{Feedback}, the mass removed from the grid,
+$\Delta M = V_{\rm cell}\sum(\rho_{\rm before}-\rho_{\rm after})$, is added to
+the particle's mass. When \field{ConserveMomentum} (needs the spectral
+wavenumber grids \field{kxarray}/\field{kyarray}/\field{kzarray}), the
+absorbed ULDM current $\mathbf j = \mathrm{Im}(\psi^*\nabla\psi)$ is
+integrated against the same absorbed fraction and deposited onto the
+particle's velocity as a mass-weighted (rocket-equation) update, so the sink
+also imparts drag/recoil rather than being a pure mass leak.
+
+\begin{verbatim}
+BondiHoyleCalibration(M, v, cs=0.0) -> (Amplitude, Radius)
+\end{verbatim}
+Returns $(A,R)$ such that \code{ApplySink}'s early-time absorption rate
+matches the classical Bondi--Hoyle--Lyttleton rate
+\begin{equation}
+  \dot M_{\rm BHL} = \frac{4\pi (GM)^2\rho}{(v^2+c_s^2)^{3/2}}, \qquad G=1
+  \text{ in code units,}
+\end{equation}
+via
+\begin{equation}
+  R = \frac{2M}{v^2+c_s^2}, \qquad
+  A = \frac{(v^2+c_s^2)^{3/2}}{8\sqrt{2\pi}\,M}.
+\end{equation}
+When \field{Sink.Dynamic} is set, \code{ApplySink} calls this every step with
+the particle's \emph{current} mass and speed (floored at \field{VFloor}, and
+$R$ optionally capped at \field{RadiusCap}) instead of using a single fixed
+$(A,R)$ for the whole run. This is a dimensional match, not a first-principles
+derivation --- verify empirically for any new regime (mass ratio, resolution,
+duration) before trusting it.
+
+\section{Known Limitations}
+
+See \code{CHANGES.md} in the repository root for the full, dated history.
+Notable open items at the time of writing:
+\begin{itemize}
+  \item \field{EXTRAS.MassChange} and \field{Sink.Feedback} both write
+    \code{masslist[i]} each step and will clobber each other if both enabled.
+  \item \field{Sink.Amplitude}/\field{Sink.Radius} are plain code-unit numbers
+    with no unit-string conversion (unlike \field{FieldSmoothing}).
+  \item Force-sampling accuracy for the particle is grid-resolution limited
+    (2nd-order finite difference + trilinear), while the particle's own
+    contribution to the field ($\Phi_{\rm TM}$) is exact analytically; this
+    asymmetry is most relevant when \field{Sink.Dynamic} shrinks the Bondi
+    radius toward the grid scale.
+  \item \field{SIM.NBodyGravity}\code{=False} only disables the
+    particle$\to$field channel; direct particle-particle gravity inside
+    \code{NBodyAdvance} is unconditional.
+\end{itemize}
+
+\section{Version History}
+
+See \code{CHANGES.md} in the repository root.
+
+\end{document}

@@ -1,4 +1,4 @@
-<center><img src="PyULLogo.gif" alt="Logo" width="400" align = "center"/></center>
+<center><img src="PyULLogo_banner.png" alt="Logo" width="500" align = "center"/></center>
 PyUL 2.40 Family - Now refactored with a structure ready for the future.
 
 # Authorship and Contact
