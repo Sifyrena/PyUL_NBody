@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.DS_Store
+.ipynb_checkpoints/
+
+# Regenerated automatically by Evolve() if missing (see Integration/isolated_potential.py)
+PyUltraLight2/Integration/Green Functions/
+
+# Simulation run outputs (not source)
+Simulations/
