@@ -249,6 +249,7 @@ def Evolve(config_or_path, Silent = False, Message = '', Additional_Psi = None, 
     if SinkRadiusCap is None:
         SinkRadiusCap = 0.25 * lengthC
     SinkConserveMomentum = SinkConfig.get("ConserveMomentum", False)
+    SinkRelativeVelocity = SinkConfig.get("RelativeVelocity", False)
 
     if smoothing == "Auto":
         smoothing = 2 * resol / lengthC # Old trick to return the usual rP value.
@@ -359,7 +360,7 @@ def Evolve(config_or_path, Silent = False, Message = '', Additional_Psi = None, 
 
     if UseSink:
         if SinkDynamic:
-            printU(f"BH Sink active on particle #{SinkIdx}: Dynamic Bondi-Hoyle calibration (VFloor={SinkVFloor}), Feedback={SinkFeedback}, ConserveMomentum={SinkConserveMomentum}.",'NBody', ToFile= GenerateLog, FilePath= LogLocation)
+            printU(f"BH Sink active on particle #{SinkIdx}: Dynamic Bondi-Hoyle calibration (VFloor={SinkVFloor}), Feedback={SinkFeedback}, ConserveMomentum={SinkConserveMomentum}, RelativeVelocity={SinkRelativeVelocity}.",'NBody', ToFile= GenerateLog, FilePath= LogLocation)
         else:
             printU(f"BH Sink active on particle #{SinkIdx}: Amplitude={SinkAmplitude}, Radius={SinkRadius}, Feedback={SinkFeedback}, ConserveMomentum={SinkConserveMomentum}.",'NBody', ToFile= GenerateLog, FilePath= LogLocation)
 
@@ -567,8 +568,23 @@ def Evolve(config_or_path, Silent = False, Message = '', Additional_Psi = None, 
     
     funct = fft_psi(psi)
     
-    ifft_funct = pyfftw.builders.ifftn(funct, axes=(0, 1, 2), threads=num_threads)       
-    
+    ifft_funct = pyfftw.builders.ifftn(funct, axes=(0, 1, 2), threads=num_threads)
+
+    # ApplySink's current-density calc (ConserveMomentum / RelativeVelocity)
+    # needs its own FFT plans, dedicated and separate from fft_psi/ifft_funct
+    # above: the main loop does `psi = ifft_funct(funct)` with no copy, so
+    # psi is an alias of ifft_funct's own persistent output buffer for the
+    # rest of the step - calling ifft_funct again from inside ApplySink
+    # would silently overwrite that buffer and corrupt the live psi before
+    # the sink decay is even applied.
+    SinkNeedCurrent = UseSink and (SinkConserveMomentum or (SinkDynamic and SinkRelativeVelocity))
+    if SinkNeedCurrent:
+        fft_sink = pyfftw.builders.fftn(psi, axes=(0, 1, 2), threads=num_threads)
+        ifft_sink = pyfftw.builders.ifftn(funct, axes=(0, 1, 2), threads=num_threads)
+    else:
+        fft_sink = None
+        ifft_sink = None
+
     rho = ne.evaluate("abs(abs(psi)**2)")
         
     rho = rho.real
@@ -1016,7 +1032,9 @@ def Evolve(config_or_path, Silent = False, Message = '', Additional_Psi = None, 
                 xarray, yarray, zarray, h, Vcell, Feedback=SinkFeedback,
                 Dynamic=SinkDynamic, VFloor=SinkVFloor, RadiusCap=SinkRadiusCap,
                 ConserveMomentum=SinkConserveMomentum,
-                kxarray=kxarray, kyarray=kyarray, kzarray=kzarray
+                kxarray=kxarray, kyarray=kyarray, kzarray=kzarray,
+                RelativeVelocity=SinkRelativeVelocity, lengthC=lengthC, resol=resol,
+                fft_psi=fft_sink, ifft_funct=ifft_sink
             )
 
         prog_bar(actual_num_steps, ix + 1, tint,'Phi ')

@@ -121,12 +121,20 @@ class Config:
                                          # as it slows and grows - this caps it so the sink stays a
                                          # local drain rather than draining the whole grid. Defaults
                                          # to 0.25*BoxLength if left None.
-                "ConserveMomentum": False  # Deposit the absorbed ULDM's momentum (from its local
+                "ConserveMomentum": False,  # Deposit the absorbed ULDM's momentum (from its local
                                          # phase gradient) onto the particle's velocity, instead of
                                          # only adding mass. Without this the sink is a pure mass
                                          # leak with no recoil - unphysical, since real accretion
                                          # exerts a drag force set by the relative velocity of the
                                          # swallowed gas. Costs 3 extra FFTs per step.
+                "RelativeVelocity": False  # Dynamic mode only: calibrate against the particle's
+                                         # speed RELATIVE TO THE LOCAL ULDM FLOW (interpolated
+                                         # current j/rho at the particle's position), not its raw
+                                         # speed in the box frame. The two differ whenever the local
+                                         # field has its own bulk motion (e.g. a soliton excited into
+                                         # dipole oscillation by the orbiting particle itself). Costs
+                                         # 3 extra FFTs per step if ConserveMomentum isn't already
+                                         # paying that cost.
             }
         }
         
@@ -262,19 +270,12 @@ class Config:
         step_factor = self.Time["StepFactor"]
         
         from PyUltraLight2.Universe.Universe import ULDMUniverse
-        self.Universe = ULDMUniverse(self.uldm["m22"])
-        self.axion_E = self.Universe.axion_E
-        self.length_unit = self.Universe.length_unit
-        self.mass_unit = self.Universe.mass_unit
-        self.energy_unit = self.Universe.energy_unit
-        self.convert = self.Universe.convert
-        self.convert_back = self.Universe.convert_back
-        self.convert_between = self.Universe.convert_between
-        
-        
-        lengthC = self.convert(length, length_units, 'l')
-    
-        t = self.convert(duration, duration_units, 't')
+        universe = ULDMUniverse(self.uldm["m22"])
+        convert = universe.convert
+
+        lengthC = convert(length, length_units, 'l')
+
+        t = convert(duration, duration_units, 't')
         
         delta_t = (lengthC/float(resol))**2/np.pi
 

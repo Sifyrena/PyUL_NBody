@@ -3,6 +3,8 @@
 import numpy as np
 import numexpr as ne
 
+from PyUltraLight2.Interpolation.Lin3D import sample_field
+
 
 def BondiHoyleCalibration(M, v, cs=0.0):
     """
@@ -36,7 +38,9 @@ def BondiHoyleCalibration(M, v, cs=0.0):
 def ApplySink(psi, rho, TMState, masslist, SinkIdx, SinkAmplitude, SinkRadius,
               xarray, yarray, zarray, h, Vcell, Feedback=True,
               Dynamic=False, VFloor=0.05, RadiusCap=None,
-              ConserveMomentum=False, kxarray=None, kyarray=None, kzarray=None):
+              ConserveMomentum=False, kxarray=None, kyarray=None, kzarray=None,
+              RelativeVelocity=False, lengthC=None, resol=None,
+              fft_psi=None, ifft_funct=None):
     """
     Damp psi with a Gaussian imaginary potential centred on the current
     position of particle SinkIdx (from TMState), and optionally feed the
@@ -55,6 +59,24 @@ def ApplySink(psi, rho, TMState, masslist, SinkIdx, SinkAmplitude, SinkRadius,
     naive (divergent) Mdot_BHL rather than over-delivering - the standard
     regularization used by sink-particle accretion schemes at low relative
     velocity.
+
+    By default, the "speed" fed into BondiHoyleCalibration is the particle's
+    speed in the box/grid frame (its raw TMState velocity). This is only the
+    correct BHL relative velocity when the local ULDM is at rest in that
+    frame - the classical formula is defined with v_rel = v_BH - v_gas. If
+    RelativeVelocity=True (requires kxarray/kyarray/kzarray, lengthC, resol),
+    the local ULDM velocity v_local = j(r0)/rho(r0) is interpolated at the
+    particle's position (from the same spectral current used for
+    ConserveMomentum below) and subtracted off first: v_rel = v_particle -
+    v_local. This matters whenever the local field has its own bulk motion -
+    e.g. a soliton excited into dipole oscillation by the orbiting particle
+    itself (the stone-skipping mechanism of Zhang et al. 2026,
+    arXiv:2602.11512) - where grid-frame speed and true relative speed can
+    diverge substantially. rho(r0) is floored to avoid a 0/0 blowup at
+    genuine wavefunction nodes; where that floor bites, v_local falls back to
+    0 (i.e. the correction is skipped locally, reducing to the old
+    grid-frame behaviour) rather than producing a meaningless huge velocity.
+    No effect when Dynamic=False (nothing consumes the speed in that case).
 
     If ConserveMomentum=True (requires kxarray/kyarray/kzarray, the sparse
     spectral wavenumber grids already built in Evolve.py), the absorbed
@@ -80,11 +102,50 @@ def ApplySink(psi, rho, TMState, masslist, SinkIdx, SinkAmplitude, SinkRadius,
     by = TMState[int(SinkIdx * 6) + 1]
     bz = TMState[int(SinkIdx * 6) + 2]
 
+    need_current = ConserveMomentum or (Dynamic and RelativeVelocity)
+
+    if need_current:
+        # Current density j = Im(psi* grad psi), computed from psi BEFORE
+        # the sink is applied (the field's own velocity field, in the box
+        # frame - the same frame TMState velocities are expressed in).
+        # Computed here (ahead of the Dynamic block below) so RelativeVelocity
+        # can reuse it too, not just ConserveMomentum.
+        # Reuse the main loop's pre-planned pyfftw transforms (built once,
+        # multi-threaded) instead of planning fresh ones every step. Each
+        # call returns a view into the plan's own persistent output buffer
+        # (the same array object every time), so calling ifft_funct three
+        # times in a row without copying would silently alias dpsi_dx and
+        # dpsi_dy onto dpsi_dz's result - copy immediately after each call.
+        psi_k = fft_psi(psi).copy()
+        dpsi_dx = ifft_funct(1j * kxarray * psi_k).copy()
+        dpsi_dy = ifft_funct(1j * kyarray * psi_k).copy()
+        dpsi_dz = ifft_funct(1j * kzarray * psi_k).copy()
+        psi_conj = np.conj(psi)
+        jx = np.imag(psi_conj * dpsi_dx)
+        jy = np.imag(psi_conj * dpsi_dy)
+        jz = np.imag(psi_conj * dpsi_dz)
+
     if Dynamic:
         vx = TMState[int(SinkIdx * 6) + 3]
         vy = TMState[int(SinkIdx * 6) + 4]
         vz = TMState[int(SinkIdx * 6) + 5]
-        speed = max(np.sqrt(vx**2 + vy**2 + vz**2), VFloor)
+
+        if RelativeVelocity:
+            pos0 = np.array([bx, by, bz])
+            rho_local = sample_field(rho, lengthC, resol, pos0, out_of_bounds=0.0)
+            RHO_FLOOR = 1e-12
+            if rho_local > RHO_FLOOR:
+                jx0 = sample_field(jx, lengthC, resol, pos0, out_of_bounds=0.0)
+                jy0 = sample_field(jy, lengthC, resol, pos0, out_of_bounds=0.0)
+                jz0 = sample_field(jz, lengthC, resol, pos0, out_of_bounds=0.0)
+                vlx, vly, vlz = jx0 / rho_local, jy0 / rho_local, jz0 / rho_local
+            else:
+                vlx = vly = vlz = 0.0
+            relx, rely, relz = vx - vlx, vy - vly, vz - vlz
+            speed = max(np.sqrt(relx**2 + rely**2 + relz**2), VFloor)
+        else:
+            speed = max(np.sqrt(vx**2 + vy**2 + vz**2), VFloor)
+
         SinkAmplitude, SinkRadius = BondiHoyleCalibration(masslist[SinkIdx], speed)
         if RadiusCap is not None:
             SinkRadius = min(SinkRadius, RadiusCap)
@@ -92,19 +153,6 @@ def ApplySink(psi, rho, TMState, masslist, SinkIdx, SinkAmplitude, SinkRadius,
     SinkPot = ne.evaluate(
         "SinkAmplitude*exp(-0.5*((xarray-bx)**2+(yarray-by)**2+(zarray-bz)**2)/SinkRadius**2)"
     )
-
-    if ConserveMomentum:
-        # Current density j = Im(psi* grad psi), computed from psi BEFORE
-        # the sink is applied (the field's own velocity field, in the box
-        # frame - the same frame TMState velocities are expressed in).
-        psi_k = np.fft.fftn(psi)
-        dpsi_dx = np.fft.ifftn(1j * kxarray * psi_k)
-        dpsi_dy = np.fft.ifftn(1j * kyarray * psi_k)
-        dpsi_dz = np.fft.ifftn(1j * kzarray * psi_k)
-        psi_conj = np.conj(psi)
-        jx = np.imag(psi_conj * dpsi_dx)
-        jy = np.imag(psi_conj * dpsi_dy)
-        jz = np.imag(psi_conj * dpsi_dz)
 
     rho_preabsorb = rho
     psi = ne.evaluate("psi*exp(-h*SinkPot)")

@@ -50,7 +50,8 @@
             "Feedback": true,
             "Dynamic": true,
             "VFloor": 0.05,
-            "ConserveMomentum": true
+            "ConserveMomentum": true,
+            "RelativeVelocity": true
         }
     },
     "uldm": {
