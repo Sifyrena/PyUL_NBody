@@ -88,7 +88,7 @@ def FWNBody(t,TMState,masslist,phiSP,smoothing,lengthC,resol,Periodic=True):
 
         #x,y,z
 
-        GradientLocal = -1*np.array([[GradientX],[GradientY],[GradientZ]])
+        GradientLocal = -1*np.array([GradientX, GradientY, GradientZ])
 
         #Initialized Against ULDM Field
         #XDDOT
@@ -189,7 +189,7 @@ def FWNBody_NI(t,TMState,masslist,phiSP,smoothing,lengthC,resol,Periodic=True):
 
         #x,y,z
 
-        GradientLocal = -1*np.array([[GradientX],[GradientY],[GradientZ]])
+        GradientLocal = -1*np.array([GradientX, GradientY, GradientZ])
 
         #Initialized Against THE VOID
         #XDDOT
