@@ -1,0 +1,137 @@
+{
+    "Saving": {
+        "Loc": "./",
+        "Flags": "Energy 1Density 2Density NBody DF Entropy 1Grav 1GravF",
+        "Format": "npy",
+        "Number": -1
+    },
+    "Time": {
+        "TimeDuration": 400,
+        "StartTime": 0.0,
+        "TimeUnits": "Myr",
+        "RKSteps": 64,
+        "StepFactor": 1
+    },
+    "Space": {
+        "Resolution": 256,
+        "Box": {
+            "BoxLength": 19.2731774168,
+            "LengthUnits": "kpc"
+        }
+    },
+    "BlackHole": {
+        "MatterParticles": {
+            "Condition": [
+                [
+                    1.0,
+                    [
+                        0,
+                        4.817380715879075,
+                        0
+                    ],
+                    [
+                        0,
+                        0,
+                        0
+                    ]
+                ]
+            ],
+            "MassUnits": "M_solar_masses",
+            "PositionUnits": "kpc",
+            "VelocityUnits": "km/s",
+            "PlummerRadius": ""
+        },
+        "FieldSmoothing": 252.77282967290265,
+        "Sink": {
+            "Flag": true,
+            "ParticleIdx": 0,
+            "Amplitude": 0.0,
+            "Radius": 0.05,
+            "Feedback": true,
+            "Dynamic": true,
+            "VFloor": 0.05,
+            "RadiusCap": null,
+            "ConserveMomentum": true,
+            "RelativeVelocity": true
+        }
+    },
+    "uldm": {
+        "m22": 10,
+        "SI": false,
+        "LHat": 0,
+        "Solitons": {
+            "Condition": [],
+            "Embedded": [],
+            "MassUnits": "",
+            "PositionUnits": "kpc",
+            "VelocityUnits": "km/s"
+        },
+        "Modifier": {
+            "UniformFieldAddOn": {
+                "Flag": true,
+                "DensityUnit": "Crit",
+                "DensityValue": 100000.0,
+                "UniformVelocity": [
+                    0,
+                    -25.0,
+                    0
+                ]
+            }
+        }
+    },
+    "INIT": {
+        "DumpInit": false,
+        "DumpFinal": false,
+        "UseInit": false,
+        "InitPath": "",
+        "InitWeight": 1
+    },
+    "BC": {
+        "EdgeClear": false,
+        "IsoP": false,
+        "DSponge": false
+    },
+    "SIM": {
+        "SelfGravity": true,
+        "NBodyInterp": true,
+        "NBodyGravity": true
+    },
+    "LEGACY": {
+        "Shift": false,
+        "NLM": false,
+        "DR": 1
+    },
+    "IO": {
+        "Stream": false,
+        "StreamChar": [
+            0
+        ]
+    },
+    "RUNTIME": {
+        "GenerateLog": true
+    },
+    "ADVANCED": {
+        "CenterCalc": false,
+        "ComputeQuad": false,
+        "ExtPhi": 0
+    },
+    "SAMPLING": {
+        "Length_Ratio": 0.5,
+        "resolR": 64
+    },
+    "EXTRAS": {
+        "PrintEK": true,
+        "MassChange": false,
+        "MassFunc": "",
+        "CorrectDrift": false,
+        "CorrectFreq": 6
+    },
+    "SPECIAL_HALTING_CONDITIONS": {
+        "AutoStop": true,
+        "AutoStop2": false,
+        "AutoStop3": false,
+        "KEThreshold": 0.9,
+        "WellThreshold": 100
+    },
+    "VERSION": "3.0.0"
+}
