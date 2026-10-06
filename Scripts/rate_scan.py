@@ -25,6 +25,8 @@ def main():
     p.add_argument('--res', type=int, default=128, help='Grid resolution N (N^3)')
     p.add_argument('--f', default='1.0', help="RateScale multiplier, or 'none' to switch the sink off")
     p.add_argument('--model', default='BHL', choices=['BHL', 'Unruh'], help='Sink.Model')
+    p.add_argument('--out', default=None, help='Base directory to write runs under (Saving.Loc), e.g. a project SSD path')
+    p.add_argument('--name', default=None, help="Run folder name (Saving.Name); default '{auto}_<model>_f<f>' so array tasks never collide")
     p.add_argument('--config', default='StoneSkipping_Baseline_Accretion.uldm')
     args = p.parse_args()
 
@@ -37,6 +39,11 @@ def main():
         c.BlackHole['Sink']['Flag'] = True
         c.BlackHole['Sink']['RateScale'] = float(args.f)
         c.BlackHole['Sink']['Model'] = args.model
+
+    if args.out:
+        c.Saving['Loc'] = args.out
+    sink_tag = 'nosink' if args.f.lower() == 'none' else f"{args.model}_f{args.f}"
+    c.Saving['Name'] = args.name or f"{{auto}}_{sink_tag}"
 
     loc = Evolve(c, Silent=True)
     print(f"DONE res={args.res} f={args.f} -> {loc}", flush=True)

@@ -68,7 +68,11 @@ class Config:
     def __init__(self):
         # Save Options
         self.Saving = {
-            "Loc": "./",
+            "Loc": "./Simulations",  # BASE directory runs are written under (created if missing).
+                                     # The legacy value "./" is treated as "./Simulations".
+            "Name": "Auto",          # Run folder name inside Loc. "Auto" = <RunSignature>_<timestamp>;
+                                     # any other string is used as given, and "{auto}" inside it
+                                     # expands to the auto name (e.g. "{auto}_f1e-3").
             "Flags": "Minimum",
             "Format": "npy",
             "Number": -1

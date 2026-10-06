@@ -122,6 +122,10 @@ def Evolve(config_or_path, Silent = False, Message = '', Additional_Psi = None, 
             printU(f"Updating Run Location to {value}", "Init")
             config.Saving["Loc"] = value
 
+        if key == "Saving_Name":
+            printU(f"Updating Run Name to {value}", "Init")
+            config.Saving["Name"] = value
+
         if key == "DSponge":
             printU(f"Setting Dispersive Sponge to {value}.", "Init")
             config.BC["DSponge"] = value
@@ -146,17 +150,24 @@ def Evolve(config_or_path, Silent = False, Message = '', Additional_Psi = None, 
             printU(f"Adding new config attribute: {key} = {value}","Init")
             setattr(config, key, value)
 
-    if config.Saving["Loc"] != "./":
-        loc = config.Saving["Loc"]
+    save_base = config.Saving["Loc"]
+    if save_base in ("./", ""):
+        save_base = "./Simulations"
+
+    auto_name = f"{config.RunSignature()}_{GenFromTime()}"
+    run_name = config.Saving.get("Name", "Auto")
+    if run_name in ("", "Auto"):
+        run_name = auto_name
     else:
-        loc = f"./Simulations/{config.RunSignature()}_{GenFromTime()}"
+        run_name = run_name.replace("{auto}", auto_name)
+
+    loc = os.path.join(save_base, run_name)
 
     # IO
 
-    try:
-        os.mkdir(str(loc))
-    except:
-        print("Save Path Exists, Continuing.")    
+    if os.path.isdir(str(loc)):
+        print("Save Path Exists, Continuing.")
+    os.makedirs(str(loc), exist_ok=True)
     
     try:
         os.mkdir(str(loc + '/Outputs'))
