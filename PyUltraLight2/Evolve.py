@@ -1,5 +1,6 @@
 import numpy as np
 import multiprocessing
+from PyUltraLight2.Utils.Threads import AvailableThreads
 import os
 import time
 from datetime import datetime
@@ -325,11 +326,11 @@ def Evolve(config_or_path, Silent = False, Message = '', Additional_Psi = None, 
 
     Credits(IsoP, UseDispSponge, embeds, SelfInt)
 
-    num_threads = multiprocessing.cpu_count()
+    num_threads, thread_source = AvailableThreads()
     if resol < 128:
-        num_threads = np.min([num_threads,4])
+        num_threads = int(np.min([num_threads,4]))
 
-    printU(f"Using {num_threads} CPU Threads for FFT.",'FFT', ToFile= GenerateLog, FilePath= LogLocation)
+    printU(f"Using {num_threads} CPU Threads for FFT (from {thread_source}).",'FFT', ToFile= GenerateLog, FilePath= LogLocation)
 
     for SaveName in SaveOptionsCompile(save_options).split():
         os.mkdir(str(loc + '/Outputs/'+SaveName))
@@ -426,7 +427,7 @@ def Evolve(config_or_path, Silent = False, Message = '', Additional_Psi = None, 
     
     Vcell = (lengthC / float(resol)) ** 3
     
-    ne.set_num_threads(num_threads)
+    ne.set_num_threads(min(num_threads, ne.MAX_THREADS))  # numexpr rejects > NUMEXPR_MAX_THREADS (default 64)
 
     ##########################################################################################
     # SET UP THE REAL SPACE COORDINATES OF THE GRID - FW Revisit
