@@ -127,6 +127,15 @@ class Config:
                                          # leak with no recoil - unphysical, since real accretion
                                          # exerts a drag force set by the relative velocity of the
                                          # swallowed gas. Costs 3 extra FFTs per step.
+                "Model": "BHL",          # Dynamic mode only: "BHL" calibrates the sink to the classical
+                                         # Bondi-Hoyle-Lyttleton rate. "Unruh" multiplies that by the
+                                         # ratio of the wave-regime absorption rate (Unruh 1976:
+                                         # sigma = 32 pi^2 A^3/(k^2 (1-e^-xi)), A=GMm, xi=2 pi A m/k;
+                                         # valid for GMm/(hbar c) << 1, k << m) to BHL,
+                                         # f = 4 S(zeta) (v/c)^3, S = 2 pi zeta/(1-e^{-2 pi zeta}),
+                                         # zeta = GM m/(hbar v), recomputed every step from the BH's
+                                         # current mass and relative speed (rho cancels). RateScale
+                                         # still multiplies on top.
                 "RateScale": 1.0,        # Dynamic mode only: multiplies the BHL-calibrated Amplitude
                                          # (kernel radius untouched), i.e. absorption rate = RateScale
                                          # x Mdot_BHL. BHL itself overestimates absorption of

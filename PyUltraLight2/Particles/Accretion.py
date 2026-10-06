@@ -1,5 +1,7 @@
 # BH absorption of ULDM via a moving imaginary-potential sink.
 
+import warnings
+
 import numpy as np
 import numexpr as ne
 
@@ -35,12 +37,28 @@ def BondiHoyleCalibration(M, v, cs=0.0):
     return Amplitude, Radius
 
 
+def UnruhOverBHL(M, v, c_code):
+    """Ratio of the wave-regime (Unruh 1976) absorption rate to the BHL rate,
+    f = 4 S(zeta) (v/c)^3, in code units (G = hbar = m_axion = 1, so
+    zeta = G M m/(hbar v) = M/v and alpha = M/c). Density cancels. Valid for
+    alpha << 1 and v << c; see Bar et al. 2019 (arXiv:1905.11745) Eqs. A18-A19.
+    """
+    if M / c_code > 0.3:
+        warnings.warn(f"Sink.Model='Unruh': alpha = GMm/(hbar c) = {M / c_code:.2f} is not << 1; "
+                      "the low-energy absorption formula is out of its validity range.")
+    zeta = M / v
+    x = 2 * np.pi * zeta
+    S = x / (-np.expm1(-x))
+    return 4.0 * S * (v / c_code) ** 3
+
+
 def ApplySink(psi, rho, TMState, masslist, SinkIdx, SinkAmplitude, SinkRadius,
               xarray, yarray, zarray, h, Vcell, Feedback=True,
               Dynamic=False, VFloor=0.05, RadiusCap=None,
               ConserveMomentum=False, kxarray=None, kyarray=None, kzarray=None,
               RelativeVelocity=False, lengthC=None, resol=None,
-              fft_psi=None, ifft_funct=None, RateScale=1.0):
+              fft_psi=None, ifft_funct=None, RateScale=1.0,
+              Model="BHL", c_code=None):
     """
     Damp psi with a Gaussian imaginary potential centred on the current
     position of particle SinkIdx (from TMState), and optionally feed the
@@ -147,6 +165,10 @@ def ApplySink(psi, rho, TMState, masslist, SinkIdx, SinkAmplitude, SinkRadius,
             speed = max(np.sqrt(vx**2 + vy**2 + vz**2), VFloor)
 
         SinkAmplitude, SinkRadius = BondiHoyleCalibration(masslist[SinkIdx], speed)
+        if Model == "Unruh":
+            SinkAmplitude = SinkAmplitude * UnruhOverBHL(masslist[SinkIdx], speed, c_code)
+        elif Model != "BHL":
+            raise ValueError(f"Unknown Sink.Model '{Model}' (expected 'BHL' or 'Unruh').")
         SinkAmplitude = SinkAmplitude * RateScale
         if RadiusCap is not None:
             SinkRadius = min(SinkRadius, RadiusCap)
