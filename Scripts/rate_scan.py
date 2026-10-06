@@ -6,9 +6,10 @@ One call = one run, so it maps directly onto a SLURM array task.
 Usage (from the repo root):
     python Scripts/rate_scan.py --res 128 --f 1e-3
     python Scripts/rate_scan.py --res 128 --f none     # fixed mass, sink off
+    python Scripts/rate_scan.py --res 128 --model Unruh --f 1   # wave-regime rate, f=1 on top
 
-f multiplies the Bondi-Hoyle-calibrated sink amplitude (Sink.RateScale):
-absorption rate = f * Mdot_BHL. Prints the run directory on completion.
+f multiplies the sink amplitude (Sink.RateScale) on top of --model:
+BHL -> absorption rate = f * Mdot_BHL; Unruh -> f * Mdot_Unruh. Prints the run directory on completion.
 """
 import argparse
 import os
@@ -23,6 +24,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--res', type=int, default=128, help='Grid resolution N (N^3)')
     p.add_argument('--f', default='1.0', help="RateScale multiplier, or 'none' to switch the sink off")
+    p.add_argument('--model', default='BHL', choices=['BHL', 'Unruh'], help='Sink.Model')
     p.add_argument('--config', default='StoneSkipping_Baseline_Accretion.uldm')
     args = p.parse_args()
 
@@ -34,6 +36,7 @@ def main():
     else:
         c.BlackHole['Sink']['Flag'] = True
         c.BlackHole['Sink']['RateScale'] = float(args.f)
+        c.BlackHole['Sink']['Model'] = args.model
 
     loc = Evolve(c, Silent=True)
     print(f"DONE res={args.res} f={args.f} -> {loc}", flush=True)
