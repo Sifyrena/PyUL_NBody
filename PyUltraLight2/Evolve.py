@@ -250,6 +250,7 @@ def Evolve(config_or_path, Silent = False, Message = '', Additional_Psi = None, 
         SinkRadiusCap = 0.25 * lengthC
     SinkConserveMomentum = SinkConfig.get("ConserveMomentum", False)
     SinkRelativeVelocity = SinkConfig.get("RelativeVelocity", False)
+    SinkRateScale = SinkConfig.get("RateScale", 1.0)
 
     if smoothing == "Auto":
         smoothing = 2 * resol / lengthC # Old trick to return the usual rP value.
@@ -360,7 +361,7 @@ def Evolve(config_or_path, Silent = False, Message = '', Additional_Psi = None, 
 
     if UseSink:
         if SinkDynamic:
-            printU(f"BH Sink active on particle #{SinkIdx}: Dynamic Bondi-Hoyle calibration (VFloor={SinkVFloor}), Feedback={SinkFeedback}, ConserveMomentum={SinkConserveMomentum}, RelativeVelocity={SinkRelativeVelocity}.",'NBody', ToFile= GenerateLog, FilePath= LogLocation)
+            printU(f"BH Sink active on particle #{SinkIdx}: Dynamic Bondi-Hoyle calibration (VFloor={SinkVFloor}), Feedback={SinkFeedback}, ConserveMomentum={SinkConserveMomentum}, RelativeVelocity={SinkRelativeVelocity}, RateScale={SinkRateScale}.",'NBody', ToFile= GenerateLog, FilePath= LogLocation)
         else:
             printU(f"BH Sink active on particle #{SinkIdx}: Amplitude={SinkAmplitude}, Radius={SinkRadius}, Feedback={SinkFeedback}, ConserveMomentum={SinkConserveMomentum}.",'NBody', ToFile= GenerateLog, FilePath= LogLocation)
 
@@ -1034,7 +1035,7 @@ def Evolve(config_or_path, Silent = False, Message = '', Additional_Psi = None, 
                 ConserveMomentum=SinkConserveMomentum,
                 kxarray=kxarray, kyarray=kyarray, kzarray=kzarray,
                 RelativeVelocity=SinkRelativeVelocity, lengthC=lengthC, resol=resol,
-                fft_psi=fft_sink, ifft_funct=ifft_sink
+                fft_psi=fft_sink, ifft_funct=ifft_sink, RateScale=SinkRateScale
             )
 
         prog_bar(actual_num_steps, ix + 1, tint,'Phi ')

@@ -127,6 +127,11 @@ class Config:
                                          # leak with no recoil - unphysical, since real accretion
                                          # exerts a drag force set by the relative velocity of the
                                          # swallowed gas. Costs 3 extra FFTs per step.
+                "RateScale": 1.0,        # Dynamic mode only: multiplies the BHL-calibrated Amplitude
+                                         # (kernel radius untouched), i.e. absorption rate = RateScale
+                                         # x Mdot_BHL. BHL itself overestimates absorption of
+                                         # collisionless wave DM by many orders of magnitude (see
+                                         # CHANGES.md), so this is the physical-rate dial.
                 "RelativeVelocity": False  # Dynamic mode only: calibrate against the particle's
                                          # speed RELATIVE TO THE LOCAL ULDM FLOW (interpolated
                                          # current j/rho at the particle's position), not its raw

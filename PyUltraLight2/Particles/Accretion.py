@@ -40,7 +40,7 @@ def ApplySink(psi, rho, TMState, masslist, SinkIdx, SinkAmplitude, SinkRadius,
               Dynamic=False, VFloor=0.05, RadiusCap=None,
               ConserveMomentum=False, kxarray=None, kyarray=None, kzarray=None,
               RelativeVelocity=False, lengthC=None, resol=None,
-              fft_psi=None, ifft_funct=None):
+              fft_psi=None, ifft_funct=None, RateScale=1.0):
     """
     Damp psi with a Gaussian imaginary potential centred on the current
     position of particle SinkIdx (from TMState), and optionally feed the
@@ -147,6 +147,7 @@ def ApplySink(psi, rho, TMState, masslist, SinkIdx, SinkAmplitude, SinkRadius,
             speed = max(np.sqrt(vx**2 + vy**2 + vz**2), VFloor)
 
         SinkAmplitude, SinkRadius = BondiHoyleCalibration(masslist[SinkIdx], speed)
+        SinkAmplitude = SinkAmplitude * RateScale
         if RadiusCap is not None:
             SinkRadius = min(SinkRadius, RadiusCap)
 
