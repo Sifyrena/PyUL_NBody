@@ -1,5 +1,4 @@
 import numpy as np
-import multiprocessing
 from PyUltraLight2.Utils.Threads import AvailableThreads
 import os
 import time
